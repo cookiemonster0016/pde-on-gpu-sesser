@@ -16,7 +16,7 @@ default(size=(1200, 800), framestyle=:box, label=false, grid=false,
     ϵtol    = 1e-8
     maxiter = 10nx
     ncheck  = ceil(Int, 0.02nx)
-    nt      = 100 # number of time steps
+    nt      = 50 # number of time steps
 
     # Derived numerics
     dx      = lx / nx
@@ -47,7 +47,7 @@ default(size=(1200, 800), framestyle=:box, label=false, grid=false,
 
 
     # Time loop
-    for t = 1:nt
+    anim = @animate for t = 1:nt
 
         #save the concentration for each timestep (because there are only 10 timesteps)
         C_old.= C
@@ -81,9 +81,6 @@ default(size=(1200, 800), framestyle=:box, label=false, grid=false,
             iter += 1
         end
 
-        p2 = plot(iter_evo, err_evo; xlabel="iter/nx", ylabel="err",
-        yscale=:log10, grid=true, markershape=:circle, markersize=10)
-        display(plot(p1, p2; layout=(2, 1)))
 
          # transport step x dir.
         if vx > 0
@@ -104,7 +101,18 @@ default(size=(1200, 800), framestyle=:box, label=false, grid=false,
             C[:, 1:end-1] .-= dt/dy * vy .* diff(C, dims=2)
         end
 
+        p1 = heatmap(xc, yc, C'; xlims=(0, lx), ylims=(0, ly),
+                     clims=(0, 1), aspect_ratio=1,
+                     xlabel="lx", ylabel="ly",
+                     title=@sprintf("Concentration field – time step %d", t))
+        p2 = plot([1, iter], [1e-8, err]; xlabel="iter", ylabel="err",
+                  yscale=:log10, grid=true, markershape=:circle, markersize=8,
+                  title="Error evolution")
+        plot(p1, p2; layout=(2,1))
+
     end
+
+    gif(anim, "concentration_evolution.gif", fps=10)
 
 end
 
