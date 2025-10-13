@@ -85,6 +85,25 @@ default(size=(1200, 800), framestyle=:box, label=false, grid=false,
         yscale=:log10, grid=true, markershape=:circle, markersize=10)
         display(plot(p1, p2; layout=(2, 1)))
 
+         # transport step x dir.
+        if vx > 0
+            C[2:end, :] .-= dt/dx * vx .* diff(C, dims = 1)
+            # Boundary condition
+            #never change the boundarys ( left boundary is constant 1 and right boundary constant 0) 
+        else
+            C[1:end-1, :] .-= dt/dx * vx .* diff(C, dims=1)
+        end
+
+
+         # transport step y dir.
+        if vy > 0
+            C[:, 2: end] .-= dt/dy * vy .* diff(C, dims = 2)
+            # Boundary condition
+            #never change the boundarys ( left boundary is constant 1 and right boundary constant 0) 
+        else
+            C[:, 1:end-1] .-= dt/dy * vy .* diff(C, dims=2)
+        end
+
     end
 
 end
