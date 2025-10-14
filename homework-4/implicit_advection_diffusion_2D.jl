@@ -112,7 +112,7 @@ default(size=(1200, 800), framestyle=:box, label=false, grid=false,
 
     end
 
-    gif(anim, "concentration_evolution.gif", fps=10)
+    gif(anim, "homework-4/concentration_evolution.gif", fps=10)
 
 end
 
