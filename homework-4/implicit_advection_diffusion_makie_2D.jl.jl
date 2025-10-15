@@ -122,8 +122,6 @@ using Printf, CairoMakie
         hm[3] = C# update heatmap
         x_err[] = iter_evo#update error plot
         y_err[] = err_evo
-        #plt[1] = iter_evo#update error plot
-        #plt[2] = err_evo
         #scatterlines!(ax2, iter_evo, err_evo)
         
         # Update arrow plot to show flux velocity field 
