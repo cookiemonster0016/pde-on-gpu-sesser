@@ -1,6 +1,6 @@
 using Printf, CairoMakie
 
-@views function steady_diffusion_1D()
+@views function steady_diffusion_2D()
     # Physics
     lx, ly  = 10.0, 10.0
     dc      = 1.0
@@ -13,7 +13,7 @@ using Printf, CairoMakie
     ϵtol    = 1e-8
     maxiter = 10nx
     ncheck  = ceil(Int, 0.02nx)
-    nt      = 30 # number of time steps
+    nt      = 100 # number of time steps
 
     # Derived numerics
     dx      = lx / nx
@@ -54,89 +54,94 @@ using Printf, CairoMakie
 
     hm = Makie.heatmap!(ax1, xc, yc, C; colormap=:viridis, colorrange=(0, 1))
     cb = Makie.Colorbar(fig[1, 2], hm, label="C")
-    ar = Makie.arrows!(ax1, xc_arr, yc_arr, qx_arr, qy_arr)
-    plt = Makie.scatterlines!(ax2, Float64[], Float64[]; )
+    ar = Makie.arrows2d!(ax1, xc_arr, yc_arr, qx_arr, qy_arr)
+    x_err = Observable(Float64[])
+    y_err = Observable(Float64[])
+
+    plt = Makie.scatterlines!(ax2, x_err, y_err)
 
     #iteration evolution for the final timestep
-    err_evo = zeros(Float64, maxiter)
-    iter_evo = zeros(Float64, maxiter)
-
     #Animation 
-    record(fig, "homework-4/heatmap_arrows.mp4"; framerate=20) do io
+    record(fig, "homework-4/heatmap_arrows.mp4", 1:nt; framerate=20) do t
+
+        err_evo = zeros(Float64, maxiter)
+        iter_evo = zeros(Float64, maxiter)
+
         # Time loop
-        for t = 1:nt
+        #for t = 1:nt
 
-            #save the concentration for each timestep (because there are only 10 timesteps)
-            C_old.= C
-            
-            # Iteration loop for diffusion
-            iter = 1; err = 2ϵtol;  
-
-            while err >= ϵtol && iter <= maxiter#only update the inner matrix (2->nx-1, 2->ny-1)
-                # second derivative in x
-                qx .-= dτ ./ (ρ * dc .+ dτ) .* (qx .+ dc .* diff(C[:, 2: end-1], dims=1) ./ dx)
-                #second derivative in y
-                qy .-= dτ ./ (ρ * dc .+ dτ) .* (qy .+ dc .* diff(C[2:end-1, :], dims = 2) ./ dy)
-                C[2:end-1,2:end-1] -= dτ ./ (1.0 .+ dτ /dt) .* ((C[2:end-1, 2:end-1] .- C_old[2:end-1, 2:end-1]) ./ dt + diff(qy, dims=2) ./ dy + diff(qx, dims=1) ./ dx)
-
-                #error and iteration for plotting
-                ErrMat = (C[2:end-1, 2: end-1] .- C_old[2:end-1,2:end-1]) ./ dt -  dc .* (diff(diff(C[:, 2:end-1], dims=1), dims=1) ./ (dx^2 )+(diff(diff(C[2:end-1, :], dims=2), dims=2)) ./ (dy^2 ))
-                
-                err = maximum(abs.((ErrMat)))
-                push!(err_evo, err)
-                push!(iter_evo, iter)
-
-                #if iter % ncheck == 0
-                #   err = maximum(abs.((C[2:end-1, 2:end-1] .- C_old[2:end-1, 2:end-1]) ./ dt -  dc .* diff(diff(diff(diff(C, dims=1), dims=1), dims=2), dims=2) ./ (dx^2)))
-                #end 
-                
-                iter += 1
-            end
-
-
-            # transport step x dir.
-            if vx > 0
-                C[2:end, :] .-= dt/dx * vx .* diff(C, dims = 1)
-                # Boundary condition
-                #never change the boundarys ( left boundary is constant 1 and right boundary constant 0) 
-            else
-                C[1:end-1, :] .-= dt/dx * vx .* diff(C, dims=1)
-            end
-
-
-            # transport step y dir.
-            if vy > 0
-                C[:, 2: end] .-= dt/dy * vy .* diff(C, dims = 2)
-                # Boundary condition
-                #never change the boundarys ( left boundary is constant 1 and right boundary constant 0) 
-            else
-                C[:, 1:end-1] .-= dt/dy * vy .* diff(C, dims=2)
-            end
-
-            #vizualization update
+        #save the concentration for each timestep (because there are only 10 timesteps)
+        C_old.= C
         
-            hm[3] = C# update heatmap
-            plt[1] = iter_evo#update error plot
-            plt[2] = err_evo
-            #scatterlines!(ax2, iter_evo, err_evo)
+        # Iteration loop for diffusion
+        iter = 1; err = 2ϵtol;  
+
+        while err >= ϵtol && iter <= maxiter#only update the inner matrix (2->nx-1, 2->ny-1)
+            # second derivative in x
+            qx .-= dτ ./ (ρ * dc .+ dτ) .* (qx .+ dc .* diff(C[:, 2: end-1], dims=1) ./ dx)
+            #second derivative in y
+            qy .-= dτ ./ (ρ * dc .+ dτ) .* (qy .+ dc .* diff(C[2:end-1, :], dims = 2) ./ dy)
+            C[2:end-1,2:end-1] -= dτ ./ (1.0 .+ dτ /dt) .* ((C[2:end-1, 2:end-1] .- C_old[2:end-1, 2:end-1]) ./ dt + diff(qy, dims=2) ./ dy + diff(qx, dims=1) ./ dx)
+
+            #error and iteration for plotting
+            ErrMat = (C[2:end-1, 2: end-1] .- C_old[2:end-1,2:end-1]) ./ dt -  dc .* (diff(diff(C[:, 2:end-1], dims=1), dims=1) ./ (dx^2 )+(diff(diff(C[2:end-1, :], dims=2), dims=2)) ./ (dy^2 ))
             
-            # Update arrow plot to show flux velocity field 
-            #interpolation
-            qx_center = 0.5 * (qx[1:end-1, :] .+ qx[2:end, :])#size: (nx-2), (ny-2)
-            qy_center = 0.5 * (qy[:, 1:end-1] .+ qy[:, 2:end])#size: (nx-2), (ny-2)
-            #only show every n_skip'th arrow
-            qx_arr .= qx_center[1:n_skip:end, 1:n_skip:end]#size: (nx-2)%10, (ny-2)%10?
-            qy_arr .= qy_center[1:n_skip:end, 1:n_skip:end]
+            err = maximum(abs.((ErrMat)))
+            push!(err_evo, err)
+            push!(iter_evo, iter)
 
-            ar[3] = qx_arr
-            ar[4] = qy_arr
-
-            recordframe!(io)# adds this frame to animation
-        
+            #if iter % ncheck == 0
+            #   err = maximum(abs.((C[2:end-1, 2:end-1] .- C_old[2:end-1, 2:end-1]) ./ dt -  dc .* diff(diff(diff(diff(C, dims=1), dims=1), dims=2), dims=2) ./ (dx^2)))
+            #end 
+            
+            iter += 1
         end
+
+
+        # transport step x dir.
+        if vx > 0
+            C[2:end, :] .-= dt/dx * vx .* diff(C, dims = 1)
+            # Boundary condition
+            #never change the boundarys ( left boundary is constant 1 and right boundary constant 0) 
+        else
+            C[1:end-1, :] .-= dt/dx * vx .* diff(C, dims=1)
+        end
+
+
+        # transport step y dir.
+        if vy > 0
+            C[:, 2: end] .-= dt/dy * vy .* diff(C, dims = 2)
+            # Boundary condition
+            #never change the boundarys ( left boundary is constant 1 and right boundary constant 0) 
+        else
+            C[:, 1:end-1] .-= dt/dy * vy .* diff(C, dims=2)
+        end
+
+        #vizualization update
+    
+        hm[3] = C# update heatmap
+        x_err[] = iter_evo#update error plot
+        y_err[] = err_evo
+        #plt[1] = iter_evo#update error plot
+        #plt[2] = err_evo
+        #scatterlines!(ax2, iter_evo, err_evo)
+        
+        # Update arrow plot to show flux velocity field 
+        #interpolation
+        qx_center = 0.5 * (qx[1:end-1, :] .+ qx[2:end, :])#size: (nx-2), (ny-2)
+        qy_center = 0.5 * (qy[:, 1:end-1] .+ qy[:, 2:end])#size: (nx-2), (ny-2)
+        #only show every n_skip'th arrow
+        qx_arr .= qx_center[1:n_skip:end, 1:n_skip:end]#size: (nx-2)%10, (ny-2)%10?
+        qy_arr .= qy_center[1:n_skip:end, 1:n_skip:end]
+
+        ar[3] = qx_arr
+        ar[4] = qy_arr
+
+        #recordframe!(io)# adds this frame to animation
+        #end
 
     end
 
 end
 
-steady_diffusion_1D()
+steady_diffusion_2D()

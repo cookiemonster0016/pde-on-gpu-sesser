@@ -3,7 +3,7 @@ using Plots, Plots.Measures, Printf
 default(size=(1200, 800), framestyle=:box, label=false, grid=false, 
         margin=10mm, lw=6, labelfontsize=20, tickfontsize=20, titlefontsize=24)
 
-@views function steady_diffusion_1D()
+@views function steady_diffusion_2D()
     # Physics
     lx, ly  = 10.0, 10.0
     dc      = 1.0
@@ -41,13 +41,12 @@ default(size=(1200, 800), framestyle=:box, label=false, grid=false,
                # xlabel="lx", ylabel="ly" , title="Initial Conditions")
    # display(p1)
 
-    #iteration evolution for the final timestep
-    err_evo = zeros(Float64, maxiter)
-    iter_evo = zeros(Float64, maxiter)
 
 
     # Time loop
     anim = @animate for t = 1:nt
+        #iteration evolution for the final timestep
+        err_evo = zeros(Float64, maxiter)
 
         #save the concentration for each timestep (because there are only 10 timesteps)
         C_old.= C
@@ -71,8 +70,7 @@ default(size=(1200, 800), framestyle=:box, label=false, grid=false,
             ErrMat = (C[2:end-1, 2: end-1] .- C_old[2:end-1,2:end-1]) ./ dt -  dc .* (diff(diff(C[:, 2:end-1], dims=1), dims=1) ./ (dx^2 )+(diff(diff(C[2:end-1, :], dims=2), dims=2)) ./ (dy^2 ))
             
             err = maximum(abs.((ErrMat)))
-            push!(err_evo, err)
-            push!(iter_evo, iter)
+            err_evo[iter] = err        
 
             #if iter % ncheck == 0
              #   err = maximum(abs.((C[2:end-1, 2:end-1] .- C_old[2:end-1, 2:end-1]) ./ dt -  dc .* diff(diff(diff(diff(C, dims=1), dims=1), dims=2), dims=2) ./ (dx^2)))
@@ -105,7 +103,7 @@ default(size=(1200, 800), framestyle=:box, label=false, grid=false,
                      clims=(0, 1), aspect_ratio=1,
                      xlabel="lx", ylabel="ly",
                      title=@sprintf("Concentration field – time step %d", t))
-        p2 = plot([1, iter], [1e-8, err]; xlabel="iter", ylabel="err",
+        p2 = plot(1:iter-1, err_evo[1:iter-1]; xlabel="iter", ylabel="err",
                   yscale=:log10, grid=true, markershape=:circle, markersize=8,
                   title="Error evolution")
         plot(p1, p2; layout=(2,1))
@@ -116,4 +114,4 @@ default(size=(1200, 800), framestyle=:box, label=false, grid=false,
 
 end
 
-steady_diffusion_1D()
+steady_diffusion_2D()
