@@ -68,10 +68,11 @@ using CairoMakie, Printf
 
     # time loop
     record(fig, "homework-5/porous_convection_2D.mp4", 1:nt; framerate=20) do it
-        @printf("it = %d\n", it)
+        #@printf("it = %d\n", it)
         # iteration loop
         iter = 1; err_Pf = 2ϵtol
         while err_Pf >= ϵtol && iter <= maxiter
+
             # pressure
             qDx[2:end-1, :] .-= (qDx[2:end-1, :] .+ k_ηf .* (diff(P, dims=1) ./ dx .- αρgx .* avx(T))) ./ (θ_dτ_D + 1.0)
             qDy[:, 2:end-1] .-= (qDy[:, 2:end-1] .+ k_ηf .* (diff(P, dims=2) ./ dy .- αρgy .* avy(T))) ./ (θ_dτ_D + 1.0)
@@ -81,10 +82,14 @@ using CairoMakie, Printf
             if iter % ncheck == 0
                 r_Pf  .= diff(qDx, dims=1) ./ dx + diff(qDy, dims=2) ./ dy
                 err_Pf = maximum(abs.(r_Pf))
-                @printf("  iter = %.1f × N, err_Pf = %1.3e\n", iter / nx, err_Pf)
+                #@printf("  iter = %.1f × N, err_Pf = %1.3e\n", iter / nx, err_Pf)
             end
             iter += 1
         end
+
+        @printf("iterations until convergence: =%.1f\n", iter)
+
+
         dta = ϕ * min(dx / maximum(abs.(qDx)), dy / maximum(abs.(qDy))) / 2.1
         dtd = min(dx, dy)^2 / λ_ρCp / 2.1
         dt  = min(dta, dtd)
