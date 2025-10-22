@@ -1,5 +1,5 @@
 using CairoMakie, Printf
-default(size=(1200, 800), framestyle=:box, label=false, grid=false, margin=10mm, lw=6, labelfontsize=20, tickfontsize=20, titlefontsize=24)
+#default(size=(1200, 800), framestyle=:box, label=false, grid=false, margin=10mm, lw=6, labelfontsize=20, tickfontsize=20, titlefontsize=24)
 
 @views avx(A) = 0.5 .* (A[1:end-1, :] .+ A[2:end,:])#staggered grid averaging x dir
 @views avy(A) = 0.5 .* (A[:, 1:end-1] .+ A[:, 2:end])#staggered grid averaging y dir
@@ -67,7 +67,7 @@ default(size=(1200, 800), framestyle=:box, label=false, grid=false, margin=10mm,
     ar = Makie.arrows2d!(ax, xar, yar, qDx_c[1:st:end, 1:st:end], qDy_c[1:st:end, 1:st:end], normalize= true)
 
     # time loop
-    anim = @animate for it in 1:nt
+    record(fig, "homework-5/porous_convection_2D.mp4", 1:nt; framerate=20) do it
         @printf("it = %d\n", it)
         # iteration loop
         iter = 1; err_Pf = 2ϵtol
@@ -104,15 +104,17 @@ default(size=(1200, 800), framestyle=:box, label=false, grid=false, margin=10mm,
                               min.(qDy[:, 3:end-1], 0.0) .* diff(T[:, 2:end  ], dims = 2) ./ dy)
 
         # Visualization
-        if it % nvis == 0
-            qDx_c .= avx(qDx)
-            qDy_c .= avy(qDy)
-            ar[3] = qDx_c[1:st:end, 1:st:end]
-            ar[4] = qDy_c[1:st:end, 1:st:end]
-            hm[3] = T
-            display(fig)
-        end
+        
+            if it % nvis == 0
+                qDx_c .= avx(qDx)
+                qDy_c .= avy(qDy)
+                ar[3] = qDx_c[1:st:end, 1:st:end]
+                ar[4] = qDy_c[1:st:end, 1:st:end]
+                hm[3] = T
+                #display(fig)
+            end
     end
-    gif(anim, "homework-5/poerus_diffusion_2d.gif", fps=10)
 end
+
+
 porous_convection_2D()
