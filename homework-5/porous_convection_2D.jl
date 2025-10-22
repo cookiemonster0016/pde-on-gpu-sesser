@@ -67,7 +67,7 @@ using CairoMakie, Printf
     ar = Makie.arrows2d!(ax, xar, yar, qDx_c[1:st:end, 1:st:end], qDy_c[1:st:end, 1:st:end], normalize= true)
 
     # time loop
-    record(fig, "homework-5/porous_convection_2D.mp4", 1:nt; framerate=20) do it
+    record(fig, "homework-5/porous_convection_2D.gif", 1:nt; framerate=20) do it
         #@printf("it = %d\n", it)
         # iteration loop
         iter = 1; err_Pf = 2ϵtol

@@ -13,7 +13,7 @@ using CairoMakie, Printf
     αρg        = sqrt(αρgx^2 + αρgy^2)
     ΔT         = 200.0
     ϕ          = 0.1
-    Ra         = 1000.0
+    Ra         = 100.0
     λ_ρCp      = 1 / Ra * (αρg * k_ηf * ΔT * ly / ϕ) # Ra = αρg*k_ηf*ΔT*ly/λ_ρCp/ϕ
  
     # numerics 
@@ -24,7 +24,7 @@ using CairoMakie, Printf
     ϵtol    = 1e-8
     maxiter = 50* max(nx, ny)
     ncheck  = ceil(Int, 0.25* max(nx, ny))
-    nt      = 500
+    nt      = 100
     nvis    = 5
     dtd     = min(dx, dy)^2 / λ_ρCp / 4.1
     r_D     = zeros(Float64, nx, ny)
@@ -75,7 +75,7 @@ using CairoMakie, Printf
     ar = Makie.arrows2d!(ax, xar, yar, qDx_c[1:st:end, 1:st:end], qDy_c[1:st:end, 1:st:end], normalize= true)
 
     # time loop
-    record(fig, "homework-5/porous_convection__implicit_2D.mp4", 1:nt; framerate=20) do it
+    record(fig, "homework-5/porous_convection__implicit_2D_Ra=100.gif", 1:nt; framerate=20) do it
         T_old .= T
 
         # set time step size
@@ -129,9 +129,7 @@ using CairoMakie, Printf
             if iter % ncheck == 0
                 r_D  .= diff(qDx, dims=1) ./ dx + diff(qDy, dims=2) ./ dy
                 #=res = - ϕ (-dTdt) + λ (T_xx + T_yy) =#
-                #r_T   .= (dTdt) .+ (diff(diff(T[: , 2:end-1], dims=1), dims=1) ./ (dx*dx) .+ diff(diff(T[2:end-1, :], dims=2), dims=2) ./ (dy*dy))
-                r_T .= -dTdt .- (diff(qTx, dims=1) ./ dx .+ diff(qTy, dims=2) ./ dy)
-
+                r_T   .= (-dTdt) .- (diff(diff(T[: , 2:end-1], dims=1), dims=1) ./ (dx*dx) .+ diff(diff(T[2:end-1, :], dims=2), dims=2) ./ (dy*dy))
 
                 err_T = maximum(abs.(r_T))
                 err_D = maximum(abs.(r_D))
