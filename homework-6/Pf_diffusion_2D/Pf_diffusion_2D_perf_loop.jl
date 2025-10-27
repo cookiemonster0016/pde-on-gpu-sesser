@@ -1,4 +1,4 @@
-using Plots, Plots.Measures, Printf, LoopVectorization
+using Plots, Plots.Measures, Printf, LoopVectorization, BenchmarkTools
 default(size=(600, 500), framestyle=:box, label=false, grid=false, margin=10mm, lw=6, labelfontsize=11, tickfontsize=11, titlefontsize=11)
 macro d_xa(A) esc(:( $A[ix+1, iy]-$A[ix,iy]  )) end
 macro d_ya(A) esc(:( $A[ix, iy+1]-$A[ix,iy]  )) end
@@ -26,6 +26,11 @@ function update_Pf!(nx, ny, Pf, qDx, qDy, _β_dτ_dx, _β_dτ_dy)
             @inbounds Pf[ix, iy] -= (@d_xa(qDx)) * _β_dτ_dx  +  (@d_ya(qDy)) * _β_dτ_dy
         end
     end
+end
+
+function compute!(nx, ny, qDx, qDy, Pf, k_ηf_dx, k_ηf_dy, _1_θ_dτ, _β_dτ_dx, _β_dτ_dy)
+    compute_flux!(nx, ny, qDx, qDy, Pf, k_ηf_dx, k_ηf_dy, _1_θ_dτ)
+    update_Pf!(nx, ny, Pf, qDx, qDy, _β_dτ_dx, _β_dτ_dy)
 end
 
 
@@ -61,17 +66,14 @@ function Pf_diffusion_2D(;do_check = false)
     # iteration loop
     t_tic = 0.0
     iter = 1; err_Pf = 2ϵtol
-    while err_Pf >= ϵtol && iter <= maxiter
+    while err_Pf >= ϵtol && iter <= maxiter && do_check
 
         #time measure after "runup"
         if iter == 11
             t_tic = Base.time()
         end
 
-
-        compute_flux!(nx, ny, qDx, qDy, Pf, k_ηf_dx, k_ηf_dy, _1_θ_dτ)
-
-        update_Pf!(nx, ny, Pf, qDx, qDy, _β_dτ_dx, _β_dτ_dy)
+        compute!(nx, ny, qDx, qDy, Pf, k_ηf_dx, k_ηf_dy, _1_θ_dτ, _β_dτ_dx, _β_dτ_dy)
     
         if do_check && iter % ncheck == 0
             r_Pf .= diff(qDx, dims=1) ./ dx .+ diff(qDy, dims=2) ./ dy
@@ -82,12 +84,20 @@ function Pf_diffusion_2D(;do_check = false)
         iter += 1
        
     end
+    t_it = 0.0
     niter = iter - 11
-    t_toc = Base.time() - t_tic
-    t_it = t_toc/niter
+    if !do_check
+        #warmup
+        compute!($nx, $ny, $qDx, $qDy, $Pf, $k_ηf_dx, $k_ηf_dy, $_1_θ_dτ, $_β_dτ_dx, $_β_dτ_dy) 
+        #directly compute t_it with benchmarktools
+        t_it = @belapsed compute!(nx, ny, qDx, qDy, Pf, k_ηf_dx, k_ηf_dy, _1_θ_dτ, _β_dτ_dx, _β_dτ_dy)
+    else
+        t_it = (Base.time() - t_tic)/niter
+    end
+    
     Aeff = 2*3 * nx*ny * 8 / 1e9 #2 = read and write, 3 = amount of arrays, nx"ny gridsize, *8/1e9 convert to Gb
     Teff = Aeff / t_it
-    @printfgit ("Time = %1.3f sec, Aeff = %1.3f GB, Teff = %1.3f GB/s \n", t_toc, Aeff, Teff)
+    @printf("Time = %1.3f sec, Aeff = %1.3f GB, Teff = %1.3f GB/s \n", t_it * niter, Aeff, Teff)
     return
 end
 
