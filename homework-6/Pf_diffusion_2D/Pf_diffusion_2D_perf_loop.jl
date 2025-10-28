@@ -87,10 +87,9 @@ function Pf_diffusion_2D(;do_check = false)
     t_it = 0.0
     niter = iter - 11
     if !do_check
-        #warmup
-        compute!($nx, $ny, $qDx, $qDy, $Pf, $k_ηf_dx, $k_ηf_dy, $_1_θ_dτ, $_β_dτ_dx, $_β_dτ_dy) 
+        
         #directly compute t_it with benchmarktools
-        t_it = @belapsed compute!(nx, ny, qDx, qDy, Pf, k_ηf_dx, k_ηf_dy, _1_θ_dτ, _β_dτ_dx, _β_dτ_dy)
+        t_it = @belapsed compute!($nx, $ny, $qDx, $qDy, $Pf, $k_ηf_dx, $k_ηf_dy, $_1_θ_dτ, $_β_dτ_dx, $_β_dτ_dy) 
     else
         t_it = (Base.time() - t_tic)/niter
     end

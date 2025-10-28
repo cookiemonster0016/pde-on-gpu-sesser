@@ -66,7 +66,7 @@ function Pf_diffusion_2D( nx, ny; bench)
             
     end
     
-    Aeff = 3*3 * nx*ny * 8 / 1e9 #2 read & 1 write, 3 = amount of arrays, nx"ny gridsize, *8/1e9 convert to Gb
+    Aeff = ( 2 + 1 + 1 ) * nx*ny * 8 / 1e9 #2 read & 1 write, 3 = amount of arrays, nx"ny gridsize, *8/1e9 convert to Gb
     Teff_ar = Aeff / t_it_ar
     Teff_ker = Aeff / t_it_ker
 
