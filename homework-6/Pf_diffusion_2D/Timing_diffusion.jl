@@ -22,4 +22,4 @@ for i in 1:8
 end
 
 plot(nx, [Toriginal, Tperf, Tloop, Tthreads], title= "T_eff_comparison", xlabel = "nx = ny", ylabel = "Teff", labels=["original" "perf" "loop" "loop with threads" ], markershape=:circle, markersize=3, xscale=:log10)
-savefig("diff_comp.png")
+savefig("diff_comp_noinbounds.png")
