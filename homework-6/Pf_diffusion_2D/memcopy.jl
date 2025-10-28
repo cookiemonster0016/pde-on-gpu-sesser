@@ -22,7 +22,7 @@ end
 function Pf_diffusion_2D( nx, ny; bench)
 
     # numerics
-    nt = 2e4
+    nt = 2e2
     #array initialisation
     C = rand(Float64, nx, ny)
     C2 = copy(C)
@@ -84,5 +84,5 @@ for i in 1:8
     Teff_bt_ar[i], Teff_bt_ker[i]= Pf_diffusion_2D(nx[i], ny[i], bench = :btool)
 end
 
-plot(nx, [Teff_bt_ar, Teff_l_ar, Teff_bt_ker, Teff_l_ker], title= "T_peak", xlabel = "nx = ny", ylabel = "Teff", labels=["benchmark array" "loop array" "benchmark kernel" "loop kernel"], markershape=:circle, markersize=3)
+plot(nx, [Teff_bt_ar, Teff_l_ar, Teff_bt_ker, Teff_l_ker], title= "T_peak", xlabel = "nx = ny", ylabel = "Teff", labels=["benchmark array" "loop array" "benchmark kernel" "loop kernel"], markershape=:circle, markersize=3, xscale=:log10)
 savefig("T_peak")
