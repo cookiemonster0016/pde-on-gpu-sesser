@@ -13,7 +13,7 @@ With the triad benchmark i computed T_peak = 3463.2643599564567 for a size of nx
 Task4
 ![Diffusion on GPU for different gridsizes](./diffusion_gpu.png)
 It can be observed, that my T_eff is for some array sizes above the peak Memory throughput.
-This is unexpected ...
+For small or very large arrays, T_eff can appear above the theoretical peak T_peak due to timing artifacts, kernel launch overhead, and memory access patterns.
 We can see That the best performance is reached at nx = 4096. 
 
 Exercise 3:
