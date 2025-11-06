@@ -12,4 +12,6 @@ With the triad benchmark i computed T_peak = 3463.2643599564567 for a size of nx
 
 Task4
 ![Diffusion on GPU for different gridsizes](./diffusion_gpu.png)
-Comment on Teff and T_peak
+
+Exercise 3:
+
