@@ -30,29 +30,29 @@ function triad_benchmark( nx, ny)
     t_it = 0.0
 
     threads = (32, 4)
-    blocks = (nx/threads[1], ny/threads[2])
+    blocks = (nx ÷ threads[1], ny ÷ threads[2])
     #fill up nx and ny to be multiples of threads
     nx = Int(threads[1]*blocks[1])
     ny = Int(threads[2]*blocks[2])
 
-    #warm up phase is this necessary??
-    #@cuda threads=threads blocks=blocks compute!(C2, A, C, s)
-    #CUDA.synchronize()
+    #warm up phase this is necessary otherwise i had values for T_peak under 30GB/s
+    @cuda threads=threads blocks=blocks compute!(C2, A, C, s)
+    CUDA.synchronize()
 
     #compute
     t_it = @elapsed begin
-        @cuda blocks=blocks threads=threads @belapsed compute!($C2, $A, $C, s)
+        @cuda blocks=blocks threads=threads compute!(C2, A, C, s)
         synchronize()
     end
     
-    Aeff = ( 2 + 1 + 1 ) * nx*ny * 8 / 1e9 #2 read & 1 write, 3 = amount of arrays, nx"ny gridsize, *8/1e9 convert to Gb
+    Aeff = ( 2 + 1) * nx*ny * 8 / 1e9 #2 read & 1 write, 3 = amount of arrays, nx"ny gridsize, *8/1e9 convert to Gb
     T_peak = Aeff / t_it
 
     return T_peak
 end
 
 
-nx = ny = 30 #16384
+nx = ny = 16384 
 
 T_peak = triad_benchmark(nx, ny)
 print("T_peak = $(T_peak)")

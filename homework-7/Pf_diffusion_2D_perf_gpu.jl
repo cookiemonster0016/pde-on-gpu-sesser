@@ -99,7 +99,7 @@ function Pf_diffusion_2D(nx, ny , maxiter;do_check = false, useThreads = false)
     cfl     = 1.0 / sqrt(2.1)
     re      = 2π
     threads = (32, 4)
-    blocks = blocks  = (nx ÷ threads[1], ny ÷ threads[2])
+    blocks = (nx ÷ threads[1], ny ÷ threads[2])
     #fill up nx and ny to be multiples of threads
     nx = Int(threads[1]*blocks[1])
     ny = Int(threads[2]*blocks[2])
