@@ -8,4 +8,8 @@ Task2
 The maximal error from the gpu and cpu calculation was 8.326672684688674e-17, which is machine precision 
 
 Task3
-With the triad benchmark i computed T_peak = 3463.2643599564567
+With the triad benchmark i computed T_peak = 3463.2643599564567 for a size of nx = ny = 16384
+
+Task4
+![Diffusion on GPU for different gridsizes](./diffusion_gpu.png)
+Comment on Teff and T_peak

@@ -159,24 +159,60 @@ function Pf_diffusion_2D(nx, ny , maxiter;do_check = false, useThreads = false)
     niter = iter - 11
 
     if !do_check
-            
-        #directly compute t_it with benchmarktools
-        t_it = @belapsed compute!($nx, $ny, $qDx, $qDy, $Pf, $k_ηf_dx, $k_ηf_dy, $_1_θ_dτ, $_β_dτ_dx, $_β_dτ_dy) 
+        if useThreads
+            #warm up phase
+            compute_t!(nx, ny, qDx, qDy, Pf, k_ηf_dx, k_ηf_dy, _1_θ_dτ, _β_dτ_dx, _β_dτ_dy)
+            #directly compute t_it with benchmarktools
+            t_it = @elapsed begin
+                compute_t!(nx, ny, qDx, qDy, Pf, k_ηf_dx, k_ηf_dy, _1_θ_dτ, _β_dτ_dx, _β_dτ_dy) 
+            end
+        else
+            #warm up phase
+            compute!(nx, ny, qDx, qDy, Pf, k_ηf_dx, k_ηf_dy, _1_θ_dτ, _β_dτ_dx, _β_dτ_dy, threads, blocks)
+            #directly compute t_it with benchmarktools
+            t_it = @elapsed begin
+                compute!(nx, ny, qDx, qDy, Pf, k_ηf_dx, k_ηf_dy, _1_θ_dτ, _β_dτ_dx, _β_dτ_dy, threads, blocks) 
+            end
+        end
     else
         t_it = (Base.time() - t_tic)/niter
-    end
-   
+    end  
         
     Aeff = 2*3 * nx*ny * 8 / 1e9 #2 = read and write, 3 = amount of arrays, nx"ny gridsize, *8/1e9 convert to Gb
     Teff = Aeff / t_it
     @printf("Time = %1.3f sec, Aeff = %1.3f GB, Teff = %1.3f GB/s \n", t_it * niter, Aeff, Teff)
-    return Array(Pf)
+    return Teff, Array(Pf)
 end
 
+#for task 2
+#=
 nx = ny = 127
 maxiter = 50
-Pf_gpu = Pf_diffusion_2D(nx, ny, maxiter, do_check = true, useThreads = false)
-Pf_cpu = Pf_diffusion_2D(nx, ny, maxiter, do_check = true, useThreads = true)
+Teff, Pf_gpu = Pf_diffusion_2D(nx, ny, maxiter, do_check = true, useThreads = false)
+Teff, Pf_cpu = Pf_diffusion_2D(nx, ny, maxiter, do_check = true, useThreads = true)
 
 print("max error: $(maximum(Pf_gpu - Pf_cpu))")
-flush(stdout)
+flush(stdout)=#
+
+#for task 4
+grid_sizes = Int.(32 .* 2 .^ (1:8) .- 1)
+
+Teff_vals = Float64[]  
+Tpeak = 3463.26        #from task 3
+
+# Run benchmarks
+for nx in grid_sizes
+    ny = nx
+    Teff, _ = Pf_diffusion_2D(nx, ny, 50, do_check=false, useThreads=false)
+    push!(Teff_vals, Teff)    
+end
+
+# Plot
+plot(grid_sizes[1:length(Teff_vals)], Teff_vals;
+     label="GPU Teff",
+     xlabel="Grid size nx = ny",
+     ylabel="Effective memory throughput (GB/s)",
+     lw=3, marker=:circle, title = "diffusion on gpu")
+
+hline!([Tpeak], color=:red, lw=2, label="Tpeak = $Tpeak GB/s")
+savefig("diffusion_gpu.png")
