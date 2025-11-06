@@ -2,7 +2,7 @@ using Plots, Plots.Measures, Printf
 default(size=(1200, 400), framestyle=:box, label=false, grid=false, margin=10mm, lw=6, labelfontsize=20, tickfontsize=20, titlefontsize=24)
 
 
-@views Diff(A) = A[2:end].-A[1:end-1]
+Diff(A) = A[2:end].-A[1:end-1]
 
 function diffusion_1D()
     # physics
@@ -14,7 +14,7 @@ function diffusion_1D()
     # derived numerics
     dx   = lx / nx
     dt   = dx^2 / dc / 2
-    nt   = nx^2 ÷ 100
+    nt   = nx^2
     xc   = LinRange(dx / 2, lx - dx / 2, nx)
     # array initialisation
     C    = @. 0.5cos(9π * xc / lx) + 0.5

@@ -12,6 +12,9 @@ With the triad benchmark i computed T_peak = 3463.2643599564567 for a size of nx
 
 Task4
 ![Diffusion on GPU for different gridsizes](./diffusion_gpu.png)
+It can be observed, that my T_eff is for some array sizes above the peak Memory throughput.
+This is unexpected ...
+We can see That the best performance is reached at nx = 4096. 
 
 Exercise 3:
-
+I only tested for equillibrium, where the solution should be 1 everywhere. I hope this is correct. For reaching equillibrium I needed to adjust nt and let it run for a bit longer. I do not have any other reference solution so i hope this is correct.
