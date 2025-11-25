@@ -17,6 +17,8 @@ jobs:
           arch: ${{ matrix.julia-arch }}
       - uses: julia-actions/cache@v1
       - uses: julia-actions/julia-buildpkg@latest
+        with:
+          project: "PorousConvection"
       - uses: julia-actions/julia-runtest@latest
         with:
           project: "PorousConvection"
