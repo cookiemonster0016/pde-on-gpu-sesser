@@ -1,2 +1,7 @@
-[deps]
-Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+#[deps]
+#Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+name = "PorousConvection"
+uuid = "86052d1c-c933-11f0-26a2-3de58623faf6"
+authors = ["Sophia Esser <sesser@student.ethz.ch>"]
+version = "0.1.0"
