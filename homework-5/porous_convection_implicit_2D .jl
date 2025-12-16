@@ -152,7 +152,7 @@ using CairoMakie, Printf
                 ar[3] = qDx_c[1:st:end, 1:st:end]
                 ar[4] = qDy_c[1:st:end, 1:st:end]
                 hm[3] = T
-                #display(fig)
+                display(fig)
             end
     end
 end
