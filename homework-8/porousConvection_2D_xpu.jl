@@ -12,7 +12,7 @@ const USE_GPU = true
 using ParallelStencil
 using ParallelStencil.FiniteDifferences2D
 @static if USE_GPU
-    @init_parallel_stencil(CUDA, Float64, 2, inbounds=false)
+    @init_parallel_stencil(CUDA, Float64, 2, inbounds=true)
 else
     @init_parallel_stencil(Threads, Float64, 2, inbounds=false)
 end
@@ -157,7 +157,8 @@ end
     T_old = copy(T)
 
     #makei plot preperation
-    st = 5 #amount of arrows, smaller value -> more arrows
+    num_arrows_x=20
+    st = floor(Int, nx / num_arrows_x)
     fig = Makie.Figure(size=(600, 800))
     ax = Makie.Axis(fig[1, 1], xlabel="x", ylabel="y", aspect=DataAspect(), title="Poreus Convection")
     T_c = Array(T)
@@ -186,7 +187,7 @@ end
     _dydy = 1.0/(dy*dy)
 
     # time loop
-    record(fig, "plots/porous_convection__implicit_gpu_2D.gif", 1:nt; framerate=n_vis) do it
+    record(fig, "plots/porous_convection__implicit_gpu_2D.gif", 1:nt; framerate=24) do it
         T_old .= T
 
         # set time step size
