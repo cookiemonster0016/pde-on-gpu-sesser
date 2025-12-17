@@ -1,9 +1,14 @@
+using Pkg
+Pkg.add("CairoMakie")
+Pkg.add("ParallelStencil")
+Pkg.add("Printf")
+Pkg.add("Plots")
 using Plots
 using CairoMakie, Printf
 #default(size=(1200, 800), framestyle=:box, label=false, grid=false, margin=10mm, lw=6, labelfontsize=20, tickfontsize=20, titlefontsize=24)
 
 #handle packages
-const USE_GPU = false
+const USE_GPU = true
 using ParallelStencil
 using ParallelStencil.FiniteDifferences2D
 @static if USE_GPU
@@ -161,8 +166,8 @@ end
 
     qDx_c = zeros(Float64, nx, ny)
     qDy_c = zeros(Float64, nx, ny)
-    qDx_c .= avx(qDx)
-    qDy_c .= avy(qDy)
+    qDx_c .= avx(Array(qDx))
+    qDy_c .= avy(Array(qDy))
     xar = xc[1:st:end]
     yar = yc[1:st:end]
 
@@ -181,7 +186,7 @@ end
     _dydy = 1.0/(dy*dy)
 
     # time loop
-    record(fig, "plots/porous_convection__implicit_2D.gif", 1:nt; framerate=20) do it
+    record(fig, "plots/porous_convection__implicit_gpu_2D.gif", 1:nt; framerate=n_vis) do it
         T_old .= T
 
         # set time step size
@@ -219,11 +224,6 @@ end
 
             #todo this is parallell indices do i need to call this function differently?
             @parallel compute_materialDerivative!(dTdt, T, T_old, qDx, qDy, _dx, _dy, _dt, _ϕ)
-            # dTdt .= (T[2:end-1, 2:end-1] .- T_old[2:end-1, 2:end-1]) ./ dt .+ #time derivative 
-            #                     ((max.(qDx[2:end-2, 2:end-1], 0.0) .* diff(T[1:end-1, 2:end-1], dims = 1) ./ dx .+        #forward x dir
-            #                     min.(qDx[3:end-1, 2:end-1], 0.0) .* diff(T[2:end, 2:end-1], dims=1) ./ dx .+              #backward x dir
-            #                     max.(qDy[2:end-1, 2:end-2], 0.0) .* diff(T[2:end-1, 1:end-1], dims = 2) ./ dy .+          #forward y dir
-            #                     min.(qDy[2:end-1, 3:end-1], 0.0) .* diff(T[2:end-1, 2:end ], dims = 2) ./ dy)) ./ ϕ       #backward y dir
             
             #complete temperature update Tnew = T + (-dTdt + grad² T )/ factor --> grad²yT = grad(temperature flux)
             #why can i not do dTdt +  λ grad²T instead of dTdt + grad (λq) because q should be gradT in the steady??? 
@@ -266,5 +266,5 @@ end
 end
 
 
-
 porous_convection_2D()
+print("finished the simulation\n")
