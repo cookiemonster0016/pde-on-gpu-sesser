@@ -67,7 +67,7 @@ function Pf_diffusion_2D(do_check = true)
 
     # iteration loop
     t_tic = 0.0
-    iter = 1; err_Pf = 2ϵtol
+    iter = 1; err_Pf = 2ϵtol; niter = 0
     while err_Pf >= ϵtol && iter <= maxiter && do_check
         #time measure after "runup"
         if iter == 11

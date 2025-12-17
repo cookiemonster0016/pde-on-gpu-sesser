@@ -13,7 +13,7 @@ using CairoMakie, Printf
     αρg        = sqrt(αρgx^2 + αρgy^2)
     ΔT         = 200.0
     ϕ          = 0.1
-    Ra         = 100.0
+    Ra         = 1000.0
     λ_ρCp      = 1 / Ra * (αρg * k_ηf * ΔT * ly / ϕ) # Ra = αρg*k_ηf*ΔT*ly/λ_ρCp/ϕ
  
     # numerics 
