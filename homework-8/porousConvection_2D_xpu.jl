@@ -111,15 +111,14 @@ end
     λ_ρCp      = 1 / Ra * (αρg * k_ηf * ΔT * ly / ϕ) # Ra = αρg*k_ηf*ΔT*ly/λ_ρCp/ϕ
  
     # numerics 
-    ny      = 63
-    nx      = 2 * (ny + 1) -1
+    nx,ny   = 1023, 511
     dx      = lx / nx
     dy      = ly / ny
-    ϵtol    = 1e-8
+    ϵtol    = 1e-6
     maxiter = 10 * max(nx, ny)
-    ncheck  = ceil(Int, 0.25* max(nx, ny))
-    nt      = 100
-    nvis    = 5
+    ncheck  = ceil(2max(nx, ny))
+    nt      = 4000
+    nvis    = 50
     dtd     = min(dx, dy)^2 / λ_ρCp / 4.1
     r_D     = @zeros( nx, ny)
 
