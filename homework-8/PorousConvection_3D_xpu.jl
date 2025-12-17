@@ -1,0 +1,307 @@
+using Pkg
+Pkg.add("CairoMakie")
+Pkg.add("ParallelStencil")
+Pkg.add("Printf")
+Pkg.add("Plots")
+using Plots
+using CairoMakie, Printf
+#default(size=(1200, 800), framestyle=:box, label=false, grid=false, margin=10mm, lw=6, labelfontsize=20, tickfontsize=20, titlefontsize=24)
+
+#handle packages
+const USE_GPU = true
+using ParallelStencil
+using ParallelStencil.FiniteDifferences3D
+@static if USE_GPU
+    @init_parallel_stencil(CUDA, Float64, 3, inbounds=false)
+else
+    @init_parallel_stencil(Threads, Float64, 3, inbounds=false)
+end
+
+@views avx(A) = 0.5 .* (A[1:end-1, :, :] .+ A[2:end, :, :])
+@views avy(A) = 0.5 .* (A[:, 1:end-1, :] .+ A[:, 2:end, :])
+@views avz(A) = 0.5 .* (A[:, :, 1:end-1] .+ A[:, :, 2:end])
+
+
+    # r_D  .= diff(qDx, dims=1) *_dx + diff(qDy, dims=2) * _dy
+    # r_T   .= (-dTdt) .- (diff(diff(T[: , 2:end-1], dims=1), dims=1) ./ (dx*dx) .+ diff(diff(T[2:end-1, :], dims=2), dims=2) ./ (dy*dy))
+@parallel function get_residual!(r_D, r_T, dTdt, qDx, qDy, qDz, T, _dx, _dy, _dz, _dxdx, _dydy, _dzdz)
+    @all(r_D) = @d_xa(qDx)*_dx + @d_ya(qDy)*_dy + @d_za(qDz)*_dz
+    @all(r_T) = -@all(dTdt) - ( @d2_xi(T)*_dxdx + @d2_yi(T)*_dydy + @d2_zi(T)*_dzdz )
+    return nothing
+end
+
+# parallel boundary conditions -> x, y update, z = fixed
+@parallel_indices (iy, iz) function bc_x!(A)
+    A[1  , iy, iz] = A[2    , iy, iz]
+    A[end, iy, iz] = A[end-1, iy, iz]
+    return
+end
+
+@parallel_indices (ix, iz) function bc_y!(A)
+    A[ix, 1, iz] = A[ix, 2, iz]
+    A[ix, end, iz] = A[ix, end-1, iz]
+    return
+end
+
+# @parallel (1:size(T,2)) bc_x!(T)
+
+#T[2:end-1, 2:end-1] .-= (dTdt .+ (diff(qTx, dims=1) ./ dx .+ diff(qTy, dims=2) ./ dy)) ./ (1.0 / dt + β_dτ_T)
+@parallel function update_temperature!(T, dTdt, qTx, qTy, qTz, _dx, _dy, _dz, _β_dτ_Tp_dt)
+    #todo is this d_xi or d_xa?
+    @inn(T) = @inn(T) - (@all(dTdt) + @d_xa(qTx) * _dx + @d_ya(qTy) * _dy + @d_za(qTz) * _dz) * _β_dτ_Tp_dt
+
+    return nothing
+end
+
+
+    # dTdt .= (T[2:end-1, 2:end-1] .- T_old[2:end-1, 2:end-1]) ./ _dt .+ #time derivative 
+    #                             ((max.(qDx[2:end-2, 2:end-1], 0.0) .* diff(T[1:end-1, 2:end-1], dims = 1) ./ _dx .+        #forward x dir
+    #                             min.(qDx[3:end-1, 2:end-1], 0.0) .* diff(T[2:end, 2:end-1], dims=1) ./ _dx .+              #backward x dir
+    #                             max.(qDy[2:end-1, 2:end-2], 0.0) .* diff(T[2:end-1, 1:end-1], dims = 2) ./ _dy .+          #forward y dir
+    #                             min.(qDy[2:end-1, 3:end-1], 0.0) .* diff(T[2:end-1, 2:end ], dims = 2) ./ _dy)) ./ _ϕ       #backward y dir
+
+@parallel_indices (ix, iy, iz) function compute_materialDerivative!(dTdt, T, T_old, qDx, qDy, qDz, _dx, _dy, _dz, _dt, _ϕ)
+    
+    dTdt[ix, iy, iz] =
+        (T[ix+1, iy+1, iz+1] - T_old[ix+1, iy+1, iz+1]) * _dt +
+
+        ( max(qDx[ix+1, iy+1, iz+1], 0.0) * (T[ix+1, iy+1, iz+1] - T[ix,   iy+1, iz+1]) * _dx +
+          min(qDx[ix+2, iy+1, iz+1], 0.0) * (T[ix+2, iy+1, iz+1] - T[ix+1, iy+1, iz+1]) * _dx +
+
+          max(qDy[ix+1, iy+1, iz+1], 0.0) * (T[ix+1, iy+1, iz+1] - T[ix+1, iy,   iz+1]) * _dy +
+          min(qDy[ix+1, iy+2, iz+1], 0.0) * (T[ix+1, iy+2, iz+1] - T[ix+1, iy+1, iz+1]) * _dy +
+
+          max(qDz[ix+1, iy+1, iz+1], 0.0) * (T[ix+1, iy+1, iz+1] - T[ix+1, iy+1, iz  ]) * _dz +
+          min(qDz[ix+1, iy+1, iz+2], 0.0) * (T[ix+1, iy+1, iz+2] - T[ix+1, iy+1, iz+1]) * _dz
+        ) * _ϕ
+
+    return nothing
+end
+
+
+
+#qTx .-= (qTx .+ λ_ρCp .* diff(T[:, 2:end-1], dims=1) ./ dx) ./ (θ_dτ_T + 1.0)#!negative flux 
+#qTy .-= (qTy .+ λ_ρCp .* diff(T[2:end-1, :], dims=2) ./ dy) ./ (θ_dτ_T + 1.0)         
+@parallel function compute_temperatureFlux!(qTx, qTy, qTz, T,
+                                           λ_ρCp_dx, λ_ρCp_dy, λ_ρCp_dz, _θ_dτ_Tp1)
+    @all(qTx) = @all(qTx) - ((@all(qTx) + λ_ρCp_dx * @d_xi(T)) * _θ_dτ_Tp1)
+    @all(qTy) = @all(qTy) - ((@all(qTy) + λ_ρCp_dy * @d_yi(T)) * _θ_dτ_Tp1)
+    @all(qTz) = @all(qTz) - ((@all(qTz) + λ_ρCp_dz * @d_zi(T)) * _θ_dτ_Tp1)
+    return nothing
+end
+           
+
+# P  .-= (diff(qDx, dims =1) ./ dx + diff(qDy, dims = 2)./dy) ./ β_dτ_D
+@parallel function update_P!(P, qDx, qDy, qDz, _β_dτ_D, _dx, _dy, _dz)
+    @all(P) = @all(P) - (@d_xa(qDx)*_dx + @d_ya(qDy)*_dy + @d_za(qDz)*_dz) * _β_dτ_D
+    return nothing
+end
+
+
+# qDx[2:end-1, :] .-= (qDx[2:end-1, :] .+ k_ηf .* (diff(P, dims=1) ./ dx .- αρgx .* avx(T))) ./ (θ_dτ_D + 1.0)
+# qDy[:, 2:end-1] .-= (qDy[:, 2:end-1] .+ k_ηf .* (diff(P, dims=2) ./ dy .- αρgy .* avy(T))) ./ (θ_dτ_D + 1.0)
+@parallel function compute_flux!(qDx, qDy, qDz, P, T, k_ηf, _dx, _dy, _dz, _θ_dτ_Dp1, αρgx, αρgy, αρgz)
+
+    @inn_x(qDx) = @inn_x(qDx) - ((@inn_x(qDx) + k_ηf * (@d_xa(P)*_dx - αρgx * @av_xa(T))) * _θ_dτ_Dp1)
+    @inn_y(qDy) = @inn_y(qDy) - ((@inn_y(qDy) + k_ηf * (@d_ya(P)*_dy - αρgy * @av_ya(T))) * _θ_dτ_Dp1)
+    @inn_z(qDz) = @inn_z(qDz) - ((@inn_z(qDz) + k_ηf * (@d_za(P)*_dz - αρgz * @av_za(T))) * _θ_dτ_Dp1)
+    return nothing
+end
+
+@views function porous_convection_2D()
+    # physics
+    lx      = 40.0
+    ly      = 40.0
+    lz      = 20.0
+    k_ηf       = 1.0
+    αρgx, αρgy, αρgz = 0.0, 0.0, 1.0
+    αρg        = sqrt(αρgx^2 + αρgy^2)
+    ΔT         = 200.0
+    ϕ          = 0.1
+    Ra         = 1000.0
+    λ_ρCp      = 1 / Ra * (αρg * k_ηf * ΔT * lz / ϕ) # This changes, because now z is up
+ 
+    # numerics 
+    nx,ny,nz   = 1023, 1023,511
+    dx      = lx / nx
+    dy      = ly / ny
+    dz      = lz / nz
+    ϵtol    = 1e-6
+    maxiter = 10 * max(nx, ny, nz)
+    ncheck  = ceil(2max(nx, ny, nz))
+    nt      = 4000
+    nvis    = 50
+    dtd     = min(dx, dy, dz)^2 / λ_ρCp / 4.1
+    r_D     = @zeros( nx, ny, nz)
+
+    # derived numerics
+    xc = LinRange(-lx/2 + dx/2, lx/2 - dx/2, nx)
+    yc = LinRange(-ly + dy/2, -dy/2, ny)
+
+    zc = LinRange(-lz + dz/2, -dz/2, nz)#todo das isch villicht falsch!!!!!!!!!!!!!!!!
+
+    cfl     = 1.0/sqrt(2.1)
+
+    # pressure PT
+    re_D    = 4π
+    θ_dτ_D  = max(lx, ly, lz) / re_D / (cfl * min(dy, dx, dz))
+    β_dτ_D  = k_ηf * re_D / (cfl * min(dx , dy, dz) * max(lx, ly, lz))
+
+    # array initialisation
+
+    dTdt        = @zeros(nx - 2, ny - 2, nz-2)#time derivative of T at cell centers
+    r_T         = @zeros(nx - 2, ny - 2, nz-2)#redsidual
+    qTy         = @zeros(nx - 2, ny - 1, nz-1)#temperature flux in y dir at faces
+    qTx         = @zeros(nx - 1, ny - 2, nz-1)#temperature flux in x dir at faces
+    qTz          = @zeros(nx - 1, ny - 1, nz-2)#temperature flux in z dir at faces
+
+    # pressure
+    P       = @zeros(nx, ny, nz)#at cell centers
+    qDx     = @zeros(nx + 1, ny, nz)#flux on faces --> now also exteriour faces
+    qDy     = @zeros(nx, ny + 1, nz)
+    qDz     = @zeros(nx, ny, nz + 1)
+
+    #initial condition for Temperature at cell centers
+    T        = Data.Array([ΔT * exp(-xc[ix]^2 - yc[iy]^2 - (zc[iz] + lz / 2)^2) for ix = 1:nx, iy = 1:ny, iz = 1:nz])
+
+    T[:, :,1] .= ΔT / 2; 
+    T[:,:, end] .= -ΔT / 2
+
+    T[[1, end], :, :] .= T[[2, end-1], :, :]
+    T[:, [1, end], :] .= T[:, [2, end-1], :]
+
+    T_old = copy(T)
+
+    #makei plot preperation
+   #st = 5 #amount of arrows, smaller value -> more arrows
+    fig = Makie.Figure(size=(600, 800))
+    ax = Makie.Axis(fig[1, 1], xlabel="x", ylabel="z", aspect=DataAspect(), title="Poreus Convection")
+   # T_c = Array(T)
+
+    #todo make this 3d
+    hm = Makie.heatmap!(ax, xc, zc, Array(T)[:, ceil(Int, ny / 2), :]; colormap=:lightrainbow, colorrange=(-50, 50))
+    cb = Makie.Colorbar(fig[1, 2], hm, label="Temperature")
+
+    qDx_c = zeros(Float64, nx,  nz)
+    qDy_c = zeros(Float64, nx,  nz)
+    qDx_c .= avx(Array(qDx))
+    qDz_c .= avz(Array(qDz))
+    xar = xc[1:st:end]
+    zar = zc[1:st:end]
+
+    #todo not sure if this ic correct
+    ar = Makie.arrows3d!(ax, xar, yar, zar, qDx_c[1:st:end, 1:st:end], qDy_c[1:st:end, 1:st:end], qDz_c[1:st:end, 1:st:end], normalize= true)
+
+    #procomputations
+    k_ηf_dx, k_ηf_dy, k_ηf_dz = k_ηf/dx, k_ηf/dy, k_ηf/dz
+    _θ_dτ_Dp1 = 1.0./(1.0 + θ_dτ_D)
+    _β_dτ_D = 1.0/(β_dτ_D)
+    
+    λ_ρCp_dx = λ_ρCp/dx
+    λ_ρCp_dy = λ_ρCp/dy
+    λ_ρCp_dz = λ_ρCp/dz
+
+    _dx = 1.0/dx
+    _dy = 1.0/dy
+    _dz = 1.0/dz
+
+    _ϕ = 1.0/ϕ
+
+    _dxdx = 1.0/(dx*dx)
+    _dydy = 1.0/(dy*dy)
+    _dzdz = 1.0/(dz*dz)
+
+    # time loop
+    record(fig, "plots/porous_convection__implicit_gpu_2D.gif", 1:nt; framerate=n_vis) do it
+        T_old .= T
+
+        # set time step size
+        dt = if it == 1
+            0.1 * min(dx, dy, dz) / (αρg * ΔT * k_ηf)
+        else
+            min(5.0 * min(dx, dy, dz) / (αρg * ΔT * k_ηf), ϕ * min(dx / maximum(abs.(qDx)), dy / maximum(abs.(qDy)), dz / maximum(abs.(qDz))) / 3.1)
+        end
+
+        _dt = 1.0/dt
+
+        # iteration loop
+        iter = 1; err_D = 2ϵtol; err_T = 2ϵtol
+        while err_D >= ϵtol && err_D >=ϵtol && iter <= maxiter
+
+            #adjust pseud-transient parameters
+            re_T    = π + sqrt(π^2 + ly^2 / λ_ρCp / dt)
+            θ_dτ_T  = max(lx, ly) / re_T / cfl / min(dx, dy, dz)
+            β_dτ_T  = (re_T * λ_ρCp) / (cfl * min(dx, dy, dz) * max(lx, ly, lz))
+            _β_dτ_Tp_dt = 1.0 / (1.0 / dt + β_dτ_T)
+            _θ_dτ_Tp1 = 1.0 / (θ_dτ_T + 1.0)
+
+            # fluid pressure update
+            @parallel compute_flux!@parallel function compute_flux!(qDx, qDy, qDz, P, T, k_ηf, _dx, _dy, _dz, _θ_dτ_Dp1, αρgx, αρgy, αρgz)
+
+            #qDx on exteriour faces stays 0
+            @parallel update_P!(P, qDx, qDy, qDz, _β_dτ_D, _dx, _dy, _dz)       
+
+            #this is only calculating the fluxes
+            #-λ Cp * grad T
+            @parallel compute_temperatureFlux!(qTx, qTy, qTz, T, λ_ρCp_dx, λ_ρCp_dy, λ_ρCp_dz, _θ_dτ_Tp1)
+            #temperature advection update
+            #material derivative --> time derivative + advection term with upwinding
+
+            #todo this is parallell indices do i need to call this function differently?
+            @parallel (1:size(dTdt,1), 1:size(dTdt,2), 1:size(dTdt,3)) compute_materialDerivative!(dTdt, T, T_old, qDx, qDy, qDz, _dx, _dy, _dz, _dt, _ϕ)
+
+            #complete temperature update Tnew = T + (-dTdt + grad² T )/ factor --> grad²yT = grad(temperature flux)
+            #why can i not do dTdt +  λ grad²T instead of dTdt + grad (λq) because q should be gradT in the steady??? 
+            @parallel update_temperature!(T, dTdt, qTx, qTy, qTz, _dx, _dy, _dz, _dt, _β_dτ_Tp_dt)
+            
+            #boundary conditions for T 
+
+            #todo call this function correctly
+            @parallel (1:size(T, 2), 1:size(T, 3)) bc_x!(T)
+            @parallel (1:size(T, 1), 1:size(T, 3)) bc_y!(T)
+
+            T[:, :, 1] .=  ΔT/2
+            T[:, :, end] .= -ΔT/2
+
+            if iter % ncheck == 0
+
+#               res = - ϕ (-dTdt) + λ (T_xx + T_yy) =#
+                @parallel get_residual!(r_D, r_T, dTdt, qDx, qDy, qDz, T, _dx, _dy, _dz, _dxdx, _dydy, _dzdz )
+
+                err_T = maximum(abs.(r_T))
+                err_D = maximum(abs.(r_D))
+                #@printf(" iter/nx=%.1f, err_D=%1.3e, err_T=%1.3e\n", iter / nx, err_D, err_T)
+            end
+            iter += 1
+        end
+        @printf("iterations until convergence: %d / %d\n", iter, maxiter)
+
+        dta = ϕ * min(dx / maximum(abs.(qDx)), dy / maximum(abs.(qDy)), dz / maximum(abs.(qDz))) / 2.1
+        dtd = min(dx, dy, dz)^2 / λ_ρCp / 2.1
+        dt  = min(dta, dtd)
+
+        # Visualization
+
+            iframe = 0
+            if do_viz && (it % nvis == 0)
+                p1 = heatmap(xc, zc, Array(T)[:, ceil(Int, ny / 2), :]'; xlims=(xc[1], xc[end]), ylims=(zc[1], zc[end]), aspect_ratio=1, c=:turbo)
+                png(p1, @sprintf("viz3D_out/%04d.png", iframe += 1))
+            end
+
+            # if it % nvis == 0
+            #     qDx_c .= avx(Array(qDx))
+            #     qDy_c .= avy(Array(qDy))
+            #     qDz_c .= avz(Array(qDz))
+            #     T_c .= Array(T)
+            #     ar[3] = qDx_c[1:st:end, 1:st:end, 1:st:end]
+            #     ar[4] = qDy_c[1:st:end, 1:st:end, 1:st:end]
+            #     ar[5] = qDz_c[1:st:end, 1:st:end, 1:st:end]#todo is this how 3d plotting works??
+            #     hm[3] = T_c
+            #     display(fig)
+            # end
+    end
+end
+
+
+porous_convection_3D()
+print("finished the simulation\n")
