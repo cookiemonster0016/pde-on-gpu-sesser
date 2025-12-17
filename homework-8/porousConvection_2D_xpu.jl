@@ -12,23 +12,24 @@ else
     @init_parallel_stencil(Threads, Float64, 2, inbounds=false)
 end
 
-#d_xa at cell centers
-#d_xi at faces
-
 @views avx(A) = 0.5 .* (A[1:end-1, :] .+ A[2:end,:])#staggered grid averaging x dir
 @views avy(A) = 0.5 .* (A[:, 1:end-1] .+ A[:, 2:end])#staggered grid averaging y dir
 
 
-##from the tips
+    # r_D  .= diff(qDx, dims=1) *_dx + diff(qDy, dims=2) * _dy
+    # r_T   .= (-dTdt) .- (diff(diff(T[: , 2:end-1], dims=1), dims=1) ./ (dx*dx) .+ diff(diff(T[2:end-1, :], dims=2), dims=2) ./ (dy*dy))
+@parallel function get_residual!(r_D, r_T, dTdt, qDx, qDy, T, _dx, _dy, _dxdx, _dydy )
+
+    @all(r_D) = @d_xa(qDx) * _dx + @d_ya(qDy) * _dy
+    @all(r_T) = -@all(dTdt) - ((@d2_xi(T)* _dxdx ) + @d2_yi(T) * _dydy)
+    return nothing
+end
 
 # parallel boundary conditions
 @parallel_indices (iy) function bc_x!(A)
-    nx, ny = size(A)
-    if iy <= ny
-        A[1  , iy] = A[2    , iy]
-        A[end, iy] = A[end-1, iy]    
-    end
 
+    A[1  , iy] = A[2    , iy]
+    A[end, iy] = A[end-1, iy]    
     return nothing
 end
 
@@ -155,7 +156,8 @@ end
     st = 5 #amount of arrows, smaller value -> more arrows
     fig = Makie.Figure(size=(600, 800))
     ax = Makie.Axis(fig[1, 1], xlabel="x", ylabel="y", aspect=DataAspect(), title="Poreus Convection")
-    hm = Makie.heatmap!(ax, xc, yc, T; colormap=:lightrainbow, colorrange=(-50, 50))
+    T_c = Array(T)
+    hm = Makie.heatmap!(ax, xc, yc, T_c; colormap=:lightrainbow, colorrange=(-50, 50))
     cb = Makie.Colorbar(fig[1, 2], hm, label="Temperature")
 
     qDx_c = zeros(Float64, nx, ny)
@@ -176,6 +178,8 @@ end
     _dx = 1.0/dx
     _dy = 1.0/dy
     _ϕ = 1.0/ϕ
+    _dxdx = 1.0/(dx*dx)
+    _dydy = 1.0/(dy*dy)
 
     # time loop
     record(fig, "plots/porous_convection__implicit_2D.gif", 1:nt; framerate=20) do it
@@ -227,14 +231,14 @@ end
             @parallel update_temperature!(T, dTdt, qTx, qTy, _dx, _dy, _dt, _β_dτ_Tp_dt)
             
             #boundary conditions for T 
-            @parallel bc_x!(T)
+            @parallel (1:size(T,2)) bc_x!(T)
             T[:, 1] .=  ΔT/2
             T[:, end] .= -ΔT/2
 
             if iter % ncheck == 0
-                r_D  .= diff(qDx, dims=1) *_dx + diff(qDy, dims=2) * _dy
-                #=res = - ϕ (-dTdt) + λ (T_xx + T_yy) =#
-                r_T   .= (-dTdt) .- (diff(diff(T[: , 2:end-1], dims=1), dims=1) ./ (dx*dx) .+ diff(diff(T[2:end-1, :], dims=2), dims=2) ./ (dy*dy))
+
+#               res = - ϕ (-dTdt) + λ (T_xx + T_yy) =#
+                @parallel get_residual!(r_D, r_T, dTdt, qDx, qDy, T, _dx, _dy, _dxdx, _dydy )
 
                 err_T = maximum(abs.(r_T))
                 err_D = maximum(abs.(r_D))
@@ -249,13 +253,14 @@ end
         dt  = min(dta, dtd)
 
         # Visualization
-        
+
             if it % nvis == 0
                 qDx_c .= avx(Array(qDx))
                 qDy_c .= avy(Array(qDy))
+                T_c .= Array(T)
                 ar[3] = qDx_c[1:st:end, 1:st:end]
                 ar[4] = qDy_c[1:st:end, 1:st:end]
-                hm[3] = Array(T)
+                hm[3] = T_c
                 display(fig)
             end
     end
