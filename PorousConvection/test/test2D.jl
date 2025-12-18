@@ -3,6 +3,7 @@ using ParallelStencil
 using ParallelStencil.FiniteDifferences2D
 using Plots, Printf
 using CairoMakie
+using Test
 
 @init_parallel_stencil(Threads, Float64, 2, inbounds=false)
 

@@ -1,6 +1,5 @@
 
 using Test
-using PorousConvection
 
 function runtests()
     exename = joinpath(Sys.BINDIR, Base.julia_exename())
@@ -14,4 +13,4 @@ function runtests()
     return
 end
 
-exit(runtests())
+runtests()

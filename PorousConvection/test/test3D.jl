@@ -2,6 +2,7 @@
 using ParallelStencil
 using ParallelStencil.FiniteDifferences3D
 using Plots, Printf
+using Test
 
 @init_parallel_stencil(Threads, Float64, 3, inbounds=false)
 
