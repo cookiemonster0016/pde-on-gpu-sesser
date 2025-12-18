@@ -2,6 +2,7 @@ using Test
 using PorousConvection
 using ParallelStencil
 using ParallelStencil.FiniteDifferences3D
+include("../PorousConvection_3D_xpu.jl")
 
 @init_parallel_stencil(Threads, Float64, 3, inbounds=false)
 
@@ -26,6 +27,7 @@ using ParallelStencil.FiniteDifferences3D
 end
 
 @testset "3D reference" begin
-    out = PorousConvection.porous_convection_3D(; nx=31, ny=31, nz=15, nt=3, maxiter=20, do_viz=false, use_gpu=false)
+    out = PorousConvection.porous_convection_3D(; nx=31, ny=31, nz=15, nt=3, maxiter=30,ncheck =2, do_viz=false)
+
     @test all(isfinite, Array(out.T))
 end
