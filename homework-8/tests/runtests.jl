@@ -1,5 +1,4 @@
 using Test
-using PorousConvection
 
 function runtests()
     exename = joinpath(Sys.BINDIR, Base.julia_exename())

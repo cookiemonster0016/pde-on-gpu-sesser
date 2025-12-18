@@ -1,3 +1,5 @@
+import Pkg
+Pkg.add("GLMakie")
 using GLMakie
 
 function load_array(Aname, A)
