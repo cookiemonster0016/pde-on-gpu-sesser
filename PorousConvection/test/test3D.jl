@@ -1,4 +1,4 @@
-using Test
+
 using ParallelStencil
 using ParallelStencil.FiniteDifferences3D
 using Plots, Printf
