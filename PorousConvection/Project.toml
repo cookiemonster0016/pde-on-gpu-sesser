@@ -2,3 +2,21 @@ name = "PorousConvection"
 uuid = "86052d1c-c933-11f0-26a2-3de58623faf6"
 authors = ["Sophia Esser <sesser@student.ethz.ch>"]
 version = "0.1.0"
+
+[deps]
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
+ParallelStencil = "94395366-693c-11ea-3b26-d9b7aac5d958"
+Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[compat]
+CUDA = "5.9.5"
+CairoMakie = "0.15.8"
+GLMakie = "0.13.8"
+ParallelStencil = "0.14.3"
+Plots = "1.41.3"
+Printf = "1.11.0"
+Test = "1.11.0"
