@@ -1,5 +1,4 @@
-using Pkg
-Pkg.add("Test")
+
 using Test
 using PorousConvection
 
