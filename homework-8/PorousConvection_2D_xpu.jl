@@ -1,21 +1,4 @@
-using Pkg
-Pkg.add("CairoMakie")
-Pkg.add("ParallelStencil")
-Pkg.add("Printf")
-Pkg.add("Plots")
-using Plots
-using CairoMakie, Printf
-#default(size=(1200, 800), framestyle=:box, label=false, grid=false, margin=10mm, lw=6, labelfontsize=20, tickfontsize=20, titlefontsize=24)
 
-#handle packages
-const USE_GPU = true
-using ParallelStencil
-using ParallelStencil.FiniteDifferences2D
-@static if USE_GPU
-    @init_parallel_stencil(CUDA, Float64, 2, inbounds=true)
-else
-    @init_parallel_stencil(Threads, Float64, 2, inbounds=false)
-end
 
 @views avx(A) = 0.5 .* (A[1:end-1, :] .+ A[2:end,:])#staggered grid averaging x dir
 @views avy(A) = 0.5 .* (A[:, 1:end-1] .+ A[:, 2:end])#staggered grid averaging y dir
@@ -102,8 +85,42 @@ end
     return nothing
 end
 
+"""
+Expands to record(...) when enable is true, otherwise to a normal for loop.
+enable is evaluated at runtime.
+"""
+macro maybe_record(enable, fig, filename, loop)
+    # Expect: for <var> in <iter> ... end
+    if !(loop isa Expr && loop.head == :for)
+        error("@maybe_record must be used on a for ... end loop")
+    end
 
-@views function porous_convection_2D()
+    iter_spec = loop.args[1]   # typically :(i = 1:n)
+    body      = loop.args[2]
+
+    # iter_spec is usually Expr(:(=), var, iter)
+    if !(iter_spec isa Expr && iter_spec.head == :(=) && length(iter_spec.args) == 2)
+        error("Unsupported loop form. Use for i in iter (or for i = iter).")
+    end
+
+    var  = iter_spec.args[1]
+    iter = iter_spec.args[2]
+
+    return esc(quote
+        if $enable
+            record($fig, $filename, $iter; framerate=24) do $var
+                $body
+            end
+        else
+            for $var in $iter
+                $body
+            end
+        end
+    end)
+end
+
+
+@views function porous_convection_2D(; nx=1023, ny=511, nt=4000, maxiter=10 * max(nx, ny),ncheck =ceil(2max(nx, ny)), do_viz=false)
     # physics
     lx      = 40.0
     ly      = 20.0
@@ -116,13 +133,9 @@ end
     λ_ρCp      = 1 / Ra * (αρg * k_ηf * ΔT * ly / ϕ) # Ra = αρg*k_ηf*ΔT*ly/λ_ρCp/ϕ
  
     # numerics 
-    nx,ny   = 1023, 511
     dx      = lx / nx
     dy      = ly / ny
     ϵtol    = 1e-6
-    maxiter = 10 * max(nx, ny)
-    ncheck  = ceil(2max(nx, ny))
-    nt      = 4000
     nvis    = 50
     dtd     = min(dx, dy)^2 / λ_ρCp / 4.1
     r_D     = @zeros( nx, ny)
@@ -187,7 +200,7 @@ end
     _dydy = 1.0/(dy*dy)
 
     # time loop
-    record(fig, "plots/porous_convection__implicit_gpu_2D.gif", 1:nt; framerate=24) do it
+    @maybe_record do_viz fig "plots/porous_convection_implicit_gpu_2D.gif" for it in 1:nt
         T_old .= T
 
         # set time step size
@@ -254,7 +267,7 @@ end
 
         # Visualization
 
-            if it % nvis == 0
+            if do_viz && it % nvis == 0
                 qDx_c .= avx(Array(qDx))
                 qDy_c .= avy(Array(qDy))
                 T_c .= Array(T)
@@ -264,8 +277,7 @@ end
                 display(fig)
             end
     end
+
+    save_array("out_T", convert.(Float32, Array(T)))
+
 end
-
-
-porous_convection_2D()
-print("finished the simulation\n")

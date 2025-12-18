@@ -1,10 +1,13 @@
 using Test
-using PorousConvection
 using ParallelStencil
 using ParallelStencil.FiniteDifferences3D
-include("../PorousConvection_3D_xpu.jl")
+using Plots, Printf
 
 @init_parallel_stencil(Threads, Float64, 3, inbounds=false)
+
+include("../utils.jl")
+include("../PorousConvection_3D_xpu.jl")
+
 
 @testset "3D unit" begin
     nx, ny, nz = 12, 8, 6
@@ -19,7 +22,7 @@ include("../PorousConvection_3D_xpu.jl")
     _θ = 0.5
     αρgx = αρgy = αρgz = 0.0
 
-    @parallel PorousConvection.compute_flux!(qDx, qDy, qDz, P, T, k_ηf, _dx, _dy, _dz, _θ, αρgx, αρgy, αρgz)
+    @parallel compute_flux!(qDx, qDy, qDz, P, T, k_ηf, _dx, _dy, _dz, _θ, αρgx, αρgy, αρgz)
 
     @test maximum(abs.(Array(qDx))) < 1e-12
     @test maximum(abs.(Array(qDy))) < 1e-12
@@ -27,7 +30,21 @@ include("../PorousConvection_3D_xpu.jl")
 end
 
 @testset "3D reference" begin
-    out = PorousConvection.porous_convection_3D(; nx=31, ny=31, nz=15, nt=3, maxiter=30,ncheck =2, do_viz=false)
+    nx=31
+    ny=31
+    nz=15
+    porous_convection_3D(; nx=31, ny=31, nz=15, nt=3, maxiter=30,ncheck =2, do_viz=false)
+    T  = zeros(Float32, nx, ny, nz)
+    Tref  = zeros(Float32, nx, ny, nz)
+    #read output file  
+    load_array("out_T", Tref)
+    #read reference file
+    load_array("reference3d", T)
+    
+    @test maximum(abs.(T .- Tref)) < 1e-5
+    
+    @test all(isfinite, Array(T))
 
-    @test all(isfinite, Array(out.T))
+    print("finished reference test\n")
+
 end

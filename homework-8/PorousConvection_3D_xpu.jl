@@ -94,7 +94,7 @@ end
     return nothing
 end
 
-@views function porous_convection_3D(nx=255, ny=127, nz=127, nt=2000, maxiter=10*max(nx, ny, nz), ncheck  = ceil(2max(nx, ny, nz)) ,do_viz = true)
+@views function porous_convection_3D(; nx=255, ny=127, nz=127, nt=2000, maxiter=10*max(nx, ny, nz), ncheck  = ceil(2max(nx, ny, nz)) ,do_viz = true)
     # physics
     lx      = 40.0
     ly      = 20.0
