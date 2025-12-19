@@ -2,7 +2,7 @@ using Random
 using Plots
 
 """
-save_array(name, A)
+    save_array(name, A)
 
 saves array A to location name.bin
 """
@@ -12,7 +12,7 @@ function save_array(Aname,A)
 end
 
 """
-load_array(name, A)
+    load_array(name, A)
 
 loads an array A from location name.bin
 """
@@ -21,12 +21,7 @@ function load_array(Aname, A)
     fid=open(fname, "r"); read!(fid, A); close(fid)
 end
 
-"""
-main()
 
-Generate a random 3×3 array, save it to disk, load it back,
-and return the loaded array.
-"""
 function main()
     # generate random 3x3 array
     A = rand(3, 3)
