@@ -32,11 +32,10 @@ jobs:
           # setup the username and email. I tend to use 'GitHub Actions Bot' with no email by default
           git config user.name "GitHub Actions Bot"
           git config user.email "<>"
-          git config set advice.addIgnoredFile false
 
       - name: commit
         run: |
           # Stage the file, commit and push
-          git add scripts/md/*
+          git add scripts/md/* -f
           git commit -m "Commit markdown files fom Literate"
           git push origin master
