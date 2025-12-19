@@ -1,9 +1,10 @@
 using Random 
 using Plots
+
 """
 save_array(name, A)
-saves array A to location name.bin
 
+saves array A to location name.bin
 """
 function save_array(Aname,A)
     fname = string(Aname, ".bin")
@@ -12,8 +13,8 @@ end
 
 """
 load_array(name, A)
-loads an array A from location name.bin
 
+loads an array A from location name.bin
 """
 function load_array(Aname, A)
     fname = string(Aname, ".bin")
@@ -36,7 +37,7 @@ function main()
     save_array("array.bin", A)
 
     # load array from file
-    B = load_array("array.bin", B)
+    load_array("array.bin", B)
 
     return B
 end
