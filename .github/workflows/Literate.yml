@@ -3,6 +3,13 @@ name: Run Literate.jl
 
 on: push
 
+defaults:
+  run:
+    working-directory: PorousConvection
+
+env:
+  JULIA_PROJECT: PorousConvection
+
 jobs:
   lit:
     runs-on: ubuntu-latest
@@ -17,8 +24,6 @@ jobs:
 
       - uses: julia-actions/cache@v1
       - uses: julia-actions/julia-buildpkg@latest
-        with:
-          project: "PorousConvection"
 
       - name: run Literate
         run: QT_QPA_PLATFORM=offscreen julia --color=yes --project -e 'cd("scripts"); include("literate-script.jl")'
