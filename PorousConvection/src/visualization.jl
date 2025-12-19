@@ -5,18 +5,18 @@ function load_array(Aname, A)
     fid=open(fname, "r"); read!(fid, A); close(fid)
 end
 
-function visualise()
+function visualise(filename, nx, ny, nz)
     lx, ly, lz = 40.0, 20.0, 20.0
-    nx = 255
-    ny = nz = 127
     T  = zeros(Float32, nx, ny, nz)
-    load_array("out_T", T)
-    xc, yc, zc = LinRange(0, lx, nx), LinRange(0, ly, ny), LinRange(0, lz, nz)
+    load_array(filename, T)
     fig = Figure(size=(800, 500))
     ax  = Axis3(fig[1, 1]; aspect=(1, 1, 0.5), title="Temperature", xlabel="lx", ylabel="ly", zlabel="lz")
-    surf_T = contour!(ax, xc, yc, zc, T; alpha=0.05, colormap=:turbo)
-    save("T_3D.png", fig)
+    surf_T = contour!(ax, 
+        0.0 .. lx,
+        0.0 .. ly,
+        0.0 .. lz, 
+        T; 
+        alpha=0.05, colormap=:turbo)
+    save("$(filename).png", fig)
     return fig
 end
-
-visualise()
