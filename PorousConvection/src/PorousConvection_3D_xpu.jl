@@ -7,6 +7,16 @@
 
     # r_D  .= diff(qDx, dims=1) *_dx + diff(qDy, dims=2) * _dy
     # r_T   .= (-dTdt) .- (diff(diff(T[: , 2:end-1], dims=1), dims=1) ./ (dx*dx) .+ diff(diff(T[2:end-1, :], dims=2), dims=2) ./ (dy*dy))
+        """
+    Computes the pressure and temperature residual r_D and r_T
+    using the material derivative of the temperature: dTdt, 
+    the pressure fluxes: qDx, qDy, qDz,
+    the current temperature: T
+    and precomputed divisions:
+    _dx = 1/dx,
+    _dxdx = 1 / dx²
+    
+    """
 @parallel function get_residual!(r_D, r_T, dTdt, qDx, qDy, qDz, T, _dx, _dy, _dz, _dxdx, _dydy, _dzdz)
     @all(r_D) = @d_xa(qDx)*_dx + @d_ya(qDy)*_dy + @d_za(qDz)*_dz
     @all(r_T) = -@all(dTdt) - ( @d2_xi(T)*_dxdx + @d2_yi(T)*_dydy + @d2_zi(T)*_dzdz )
@@ -14,12 +24,17 @@
 end
 
 # parallel boundary conditions -> x, y update, z = fixed
+"""
+applies Neumann boundary conditions in x direction
+"""
 @parallel_indices (iy, iz) function bc_x!(A)
     A[1  , iy, iz] = A[2    , iy, iz]
     A[end, iy, iz] = A[end-1, iy, iz]
     return
 end
-
+"""
+applies Neumann boundary conditions in y direction
+"""
 @parallel_indices (ix, iz) function bc_y!(A)
     A[ix, 1, iz] = A[ix, 2, iz]
     A[ix, end, iz] = A[ix, end-1, iz]
@@ -29,6 +44,14 @@ end
 # @parallel (1:size(T,2)) bc_x!(T)
 
 #T[2:end-1, 2:end-1] .-= (dTdt .+ (diff(qTx, dims=1) ./ dx .+ diff(qTy, dims=2) ./ dy)) ./ (1.0 / dt + β_dτ_T)
+"""
+Updates the Temperature in 3 dimensions : T
+
+using the temperature fluxes: qTx, qTy, qTz
+and precomputed divisions:
+_dx = 1/ dx ...,
+_β_dτ_Tp_dt = 1 / (β_dτ_T + dt)
+"""
 @parallel function update_temperature!(T, dTdt, qTx, qTy, qTz, _dx, _dy, _dz, _β_dτ_Tp_dt)
     #todo is this d_xi or d_xa?
     @inn(T) = @inn(T)- (@all(dTdt) + @d_xa(qTx) * _dx + @d_ya(qTy) * _dy + @d_za(qTz) * _dz) * _β_dτ_Tp_dt
@@ -44,6 +67,15 @@ end
             #                         min.((qDx)[ix+2, iy+1], 0.0) * (T[ix+2, iy+1] - T[ix+1, iy+1]) * _dx +              #backward x dir
             #                         max.((qDy)[ix+1, iy+1], 0.0) * (T[ix+1, iy+1] - T[ix+1, iy]) * _dy +          #forward y dir
             #                         min.((qDy)[ix+1, iy+2], 0.0) * (T[ix+1, iy+2] - T[ix+1, iy+1]) * _dy) * _ϕ       #backward y dir
+"""
+Computes the material derivative of the temperature: dTdt
+using The current and the old temperature: T, Told,
+The pressure fluxes: qDx, qDy, qDz
+and the precomputed divisions:
+_dx = 1/dx, ...
+_dt = 1 / dt, 
+_ϕ = 1 / ϕ
+"""   
 
 @parallel_indices (ix, iy, iz) function compute_materialDerivative!(dTdt, T, T_old, qDx, qDy, qDz, _dx, _dy, _dz, _dt, _ϕ)
     
@@ -66,7 +98,16 @@ end
 
 
 #    @all(qTx) = @all(qTx) - ((@all(qTx) + λ_ρCp_dx * @d_xi(T)) *_θ_dτ_Tp1)
-#   @all(qTy) = @all(qTy) - ((@all(qTy) + λ_ρCp_dy * @d_yi(T)) *_θ_dτ_Tp1)        
+#   @all(qTy) = @all(qTy) - ((@all(qTy) + λ_ρCp_dy * @d_yi(T)) *_θ_dτ_Tp1) 
+"""
+computes the temperature flux in 3 dimensions : qTx, qTy, qTz
+using the temperature: T
+and precomputed divisions:
+_dx = 1/ dx ...,
+_θ_dτ_Dp1 = 1 / θ_dτ_D + 1
+ λ_ρCp_dx =  λ_ρCp / dx ...,
+
+"""       
 @parallel function compute_temperatureFlux!(qTx, qTy, qTz, T, λ_ρCp_dx, λ_ρCp_dy, λ_ρCp_dz, _θ_dτ_Tp1)
 
     @all(qTx) = @all(qTx) - ((@all(qTx) + λ_ρCp_dx * @d_xi(T)) *_θ_dτ_Tp1)
@@ -78,6 +119,14 @@ end
            
 
 # P  .-= (diff(qDx, dims =1) ./ dx + diff(qDy, dims = 2)./dy) ./ β_dτ_D
+"""
+Updates the pressure in 3 dimensions : P
+using forces in x, y and z direction, αρgx, αρgy, αρgz,
+the pressure fluxes: qDx, qDy, qDz
+and precomputed divisions:
+_dx = 1/ dx ...,
+_θ_dτ_D = 1 / θ_dτ_D
+"""
 @parallel function update_P!(P, qDx, qDy, qDz, _β_dτ_D, _dx, _dy, _dz)
     @all(P) = @all(P) - (@d_xa(qDx)*_dx + @d_ya(qDy)*_dy + @d_za(qDz)*_dz) * _β_dτ_D
     return nothing
@@ -86,6 +135,13 @@ end
 
     # @inn_x(qDx) = @inn_x(qDx) - ((@inn_x(qDx) + k_ηf * (@d_xa(P)*_dx - αρgx .* @av_xa(T)))* _θ_dτ_Dp1)
     # @inn_y(qDy) = @inn_y(qDy) - ((@inn_y(qDy) + k_ηf * (@d_ya(P)*_dy - αρgy .* @av_ya(T))) * _θ_dτ_Dp1)
+    """
+computes the pressure flux in 3 dimensions : qDx, qDy, qDz
+using forces in x, y and z direction, αρgx, αρgy, αρgz
+and precomputed divisions:
+_dx = 1/ dx ...,
+_θ_dτ_Dp1 = 1 / θ_dτ_D + 1
+"""
 @parallel function compute_flux!(qDx, qDy, qDz, P, T, k_ηf, _dx, _dy, _dz, _θ_dτ_Dp1, αρgx, αρgy, αρgz)
 
     @inn_x(qDx) = @inn_x(qDx) - ((@inn_x(qDx) + k_ηf * (@d_xa(P)*_dx - αρgx .* @av_xa(T))) * _θ_dτ_Dp1)
@@ -94,6 +150,10 @@ end
     return nothing
 end
 
+"""
+Does a simulation of porous convection.
+It can run on a CPU or GPU
+"""
 @views function porous_convection_3D(; nx=255, ny=127, nz=127, nt=2000, maxiter=10*max(nx, ny, nz), ncheck  = ceil(2max(nx, ny, nz)) ,do_viz = true)
     # physics
     lx      = 40.0

@@ -75,8 +75,16 @@ end
 end
 
 
+
 # qDx[2:end-1, :] .-= (qDx[2:end-1, :] .+ k_ηf .* (diff(P, dims=1) ./ dx .- αρgx .* avx(T))) ./ (θ_dτ_D + 1.0)
 # qDy[:, 2:end-1] .-= (qDy[:, 2:end-1] .+ k_ηf .* (diff(P, dims=2) ./ dy .- αρgy .* avy(T))) ./ (θ_dτ_D + 1.0)
+"""
+computes the pressure flux in 3 dimensions : qDx, qDy, qDz
+using forces in x, y and z direction, αρgx, αρgy, αρgz
+and precomputed divisions:
+_dx = 1/ dx ...,
+_θ_dτ_Dp1 = 1 / θ_dτ_D + 1
+"""
 @parallel function compute_flux!(qDx, qDy, P, T, k_ηf, _dx, _dy, _θ_dτ_Dp1, αρgx, αρgy)
 
     @inn_x(qDx) = @inn_x(qDx) - ((@inn_x(qDx) + k_ηf * (@d_xa(P)*_dx - αρgx .* @av_xa(T)))* _θ_dτ_Dp1)
@@ -119,7 +127,10 @@ macro maybe_record(enable, fig, filename, loop)
     end)
 end
 
-
+"""
+Does a simulation of porous convection.
+It can run on CPUs or GPUs
+"""
 @views function porous_convection_2D(; nx=1023, ny=511, nt=4000, maxiter=10 * max(nx, ny),ncheck =ceil(2max(nx, ny)), do_viz=false)
     # physics
     lx      = 40.0
