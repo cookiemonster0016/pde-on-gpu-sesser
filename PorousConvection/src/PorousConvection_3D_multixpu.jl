@@ -42,12 +42,18 @@ max_g(A) = (max_l = maximum(A); MPI.Allreduce(max_l, MPI.MAX, MPI.COMM_WORLD))
 end
 
 # parallel boundary conditions -> x, y update, z = fixed
+"""
+Applies Neumann boundary condition in x direction
+"""
 @parallel_indices (iy, iz) function bc_x!(A)
     A[1  , iy, iz] = A[2    , iy, iz]
     A[end, iy, iz] = A[end-1, iy, iz]
     return
 end
 
+"""
+Applies Neumann boundary condition in y direction
+"""
 @parallel_indices (ix, iz) function bc_y!(A)
     A[ix, 1, iz] = A[ix, 2, iz]
     A[ix, end, iz] = A[ix, end-1, iz]
