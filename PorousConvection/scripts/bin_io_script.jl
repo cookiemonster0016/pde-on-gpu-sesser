@@ -23,20 +23,15 @@ end
 
 
 function main()
-    # generate random 3x3 array
     A = rand(3, 3)
-
-    # initialize array for reading
     B = zeros(3, 3)
-    # save array to file
-    save_array("array.bin", A)
 
-    # load array from file
-    load_array("array.bin", B)
+    save_array("array", A)
+    load_array("array", B)
 
     return B
 end
 
-# run main and plot result
+# Grenerate random 3x3 matrix and plot it
 B = main()
 heatmap(B)
