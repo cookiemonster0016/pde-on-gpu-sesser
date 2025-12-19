@@ -11,25 +11,14 @@ The system is described by Darcay law (and mass conservation):
 
 Describing how the temperature changes depending on buoyancy and transport in a porous medium.
 
-$$
-\mathbf{q}
-=
-- k \left( \nabla P - \rho(T)\,\mathbf{g} \right)
-$$
+$$\mathbf{q}=- k \left( \nabla P - \rho(T)\,\mathbf{g} \right)$$
 
 Mass conservation:
-$$
-\nabla \cdot \mathbf{q} = 0
-$$
+$$\nabla \cdot \mathbf{q} = 0$$
 
 and the advection diffusion equation:
 
-$$
-\phi \frac{\partial T}{\partial t}
-+ \mathbf{q} \cdot \nabla T
-=
-\lambda \nabla^{2} T
-$$
+$$\phi \frac{\partial T}{\partial t} + \mathbf{q} \cdot \nabla T = \lambda \nabla^{2} T$$
 
 Describing how the temperature 
 changes depending on the fluid flow.
@@ -40,27 +29,21 @@ The equations stated before are discretized and and solved on a staggered grid, 
 
 They are solved implicitly using the pseudo transient method for the temperature and the pressure.
 
-$$
-\mathcal{F}(u) = 0
-$$
+$$\mathcal{F}(u) = 0$$
 
 The idea is to interduce an artificial time $\tau$
 
-$$
-\frac{\partial u}{\partial \tau} + \mathcal{F}(u) = 0
-$$
+$$\frac{\partial u}{\partial \tau} + \mathcal{F}(u) = 0$$
 
 And relax the systhem until it reaches a steady state:
-$$
-u^{k+1} = u^{k} - \Delta \tau \, \mathcal{F}(u^{k})
-$$
+$$u^{k+1} = u^{k} - \Delta \tau \, \mathcal{F}(u^{k})$$
 
 If the steady state is reached for the temperature if:
-$$
-- \phi \frac{\partial T}{\partial t}
-- \mathbf{q} \cdot \nabla T
-+ \lambda \nabla^{2} T = 0 $$
+
+$$- \phi \frac{\partial T}{\partial t} - \mathbf{q} \cdot \nabla T + \lambda \nabla^{2} T = 0 $$
+
 and for the pressure:
+
 $$\nabla \cdot \mathbf{q} = 0$$
 
 This derivatives are computed numerically by central differences.
@@ -70,46 +53,30 @@ Then the whole systhem goes forward a real timestep.
 In one pseudotimestep the following steps need to be done to relax the system:
 
 1. Compute the Darcy fluxes:
-$$ \mathbf{q}_D \leftarrow \mathbf{q}_D - \theta_D \left( \mathbf{q}_D +
-k \left( \nabla P - \rho(T)\,\mathbf{g} \right)
-\right)
-$$
+   
+$$ \mathbf{q}_D \leftarrow \mathbf{q}_D - \theta_D \left( \mathbf{q}_D + k \left( \nabla P - \rho(T)\,\mathbf{g} \right)\right)$$
 
 2. Update the pressures
 
 $$P \leftarrow P - \beta_D \, \nabla \cdot \mathbf{q}_D $$
 
 3. Compute the termal diffusion fluxes:
-$$
-\mathbf{q}_T \leftarrow
-\mathbf{q}_T
--
-\theta_T
-\left(
-\mathbf{q}_T
-+
-\lambda \nabla T
-\right)
-$$
+   
+$$\mathbf{q}_T \leftarrow \mathbf{q}_T - \theta_T \left( \mathbf{q}_T + \lambda \nabla T \right)$$
 
-4. Compute the material derivative of the temperature with the upwinding scheme
-$$
-\frac{DT}{Dt} = \frac{T - T_{\text{old}}}{\Delta t} + \frac{1}{\phi}\, \mathbf{q}_D\cdot \nabla T $$
+5. Compute the material derivative of the temperature with the upwinding scheme
+   
+$$\frac{DT}{Dt} = \frac{T - T_{\text{old}}}{\Delta t} + \frac{1}{\phi}\, \mathbf{q}_D\cdot \nabla T $$
 
-5. Update the temperature:
-$$
-T \leftarrow
-T - \frac{\displaystyle \frac{\mathrm{D}T}{\mathrm{D}t} + \nabla \cdot \mathbf{q}_T }
-{\displaystyle 1 /\Delta t + \beta_T}
-$$
+6. Update the temperature:
+   
+$$ T \leftarrow T - \frac{\displaystyle \frac{\mathrm{D}T}{\mathrm{D}t} + \nabla \cdot \mathbf{q}_T }{\displaystyle 1 /\Delta t + \beta_T}$$
 
-6. Apply the boundary conditions.
+7. Apply the boundary conditions.
 
-7. Then the temperature and the pressure residual are computed,
+8. Then the temperature and the pressure residual are computed,
 
-$$ r_T = - \phi \frac{\partial T}{\partial t}
-- \mathbf{q} \cdot \nabla T
-+ \lambda \nabla^{2} T $$
+$$ r_T = - \phi \frac{\partial T}{\partial t} - \mathbf{q} \cdot \nabla T + \lambda \nabla^{2} T $$
 and for the pressure:
 $$r_p = \nabla \cdot \mathbf{q}$$
 
