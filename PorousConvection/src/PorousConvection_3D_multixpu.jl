@@ -1,6 +1,20 @@
 using ImplicitGlobalGrid
 import MPI
 using Plots, Printf
+include("utils.jl")
+
+using ImplicitGlobalGrid
+import MPI
+using Plots, Printf
+using ParallelStencil
+using ParallelStencil.FiniteDifferences3D
+
+const USE_GPU = true
+@static if USE_GPU
+    @init_parallel_stencil(CUDA, Float64, 3, inbounds=true)
+else
+    @init_parallel_stencil(Threads, Float64, 3, inbounds=false)
+end
 
 @views avx(A) = 0.5 .* (A[1:end-1, :, :] .+ A[2:end, :, :])
 @views avy(A) = 0.5 .* (A[:, 1:end-1, :] .+ A[:, 2:end, :])
@@ -100,13 +114,16 @@ end
 @views function porous_convection_3D(do_viz = true)
    
    #global grid init
-    nz          = 63
+    nz          = 127
     nx,ny       = 2 * (nz + 1) - 1, nz
-    me, dims    = init_global_grid(nx, ny, nz)  # init global grid and more
+
+    me, dims    = init_global_grid(nx, ny, nz, select_device = false)  # init global grid and more
     b_width     = (8, 8, 4)                     # for comm / comp overlap
-    nt=500
-    maxiter=10*max(nx, ny, nz)
-    ncheck  = ceil(2max(nx, ny, nz)) 
+    nt=6000
+    maxiter=10*max(nx_g(), ny_g(), nz_g())
+    ncheck  = ceil(2max(nx_g(), ny_g(), nz_g())) 
+
+    if(me==0) @printf("starting initialization") end
 
     # physics
     lx      = 40.0
@@ -121,11 +138,11 @@ end
     λ_ρCp      = 1 / Ra * (αρg * k_ηf * ΔT * lz / ϕ) # This changes, because now z is up
  
     # numerics
-    dx      = lx / nx
-    dy      = ly / ny
-    dz      = lz / nz
+    dx      = lx / nx_g()
+    dy      = ly / ny_g()
+    dz      = lz / nz_g()
     ϵtol    = 1e-6
-    nvis    = 50
+    nvis    = 100
     dtd     = min(dx, dy, dz)^2 / λ_ρCp / 4.1
     r_D     = @zeros( nx, ny, nz)
 
@@ -133,7 +150,7 @@ end
     xc = LinRange(-lx/2 + dx/2, lx/2 - dx/2, nx)
     yc = LinRange(-ly/2 + dy/2, ly/2 - dy/2, ny)
 
-    zc = LinRange(-lz + dz/2, -dz/2, nz)#todo das isch villicht falsch!!!!!!!!!!!!!!!!
+    zc = LinRange(-lz + dz/2, -dz/2, nz)
 
     cfl     = 1.0/sqrt(3.1)
 
@@ -201,6 +218,8 @@ end
         iframe = 0
     end
 
+    if(me==0) @printf("starting timeloop") end
+
     # time loop
     for it in 1:nt
 
@@ -252,16 +271,11 @@ end
                 @parallel update_temperature!(T, dTdt, qTx, qTy, qTz, _dx, _dy, _dz, _β_dτ_Tp_dt)
                 
                 #boundary conditions for T 
-
-                #todo call this function correctly
                 @parallel (1:size(T, 2), 1:size(T, 3)) bc_x!(T)
                 @parallel (1:size(T, 1), 1:size(T, 3)) bc_y!(T)
                 update_halo!(T)
 
             end
-
-            T[:, :, 1] .=  ΔT/2
-            T[:, :, end] .= -ΔT/2
 
             if iter % ncheck == 0
 
@@ -299,5 +313,5 @@ end
     return
 end
 
-
+print("calling convection diffusion")
 porous_convection_3D(true)
