@@ -85,10 +85,8 @@ and only if both of them are below a defined threshhold the next timestep begins
 
 **Conclusion and Results**
 
-This is the simulation ran on 32 GPUs with a resolution of 1012 * 500 * 250 for 2000 timesteps.
-
-<video width="320" height="240" controls>
-  <source src="./plots/out_T.mp4" type="video/mp4">
-</video>
+This is the simulation ran on 32 GPUs with a resolution of 1012 * 500 * 250 for 2000 timesteps. 
+I accidently allocated to many gpus. This is why my simulation runs for a shorter amount of time, because my grid has more gridcells, so the cfl condition forces the timestep to be smaller.
+![3 Dimensional porous convection]("./plots/out.gif")
 
 A three-dimensional porous convection problem was successfully implemented and solved using a finite-difference method with GPU acceleration and MPI-based domain decomposition. Additionally it can also be run with CPU and multiple CPUs
