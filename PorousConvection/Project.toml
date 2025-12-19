@@ -1,7 +1,7 @@
 name = "PorousConvection"
 uuid = "86052d1c-c933-11f0-26a2-3de58623faf6"
-authors = ["Sophia Esser <sesser@student.ethz.ch>"]
 version = "0.1.0"
+authors = ["Sophia Esser <sesser@student.ethz.ch>"]
 
 [deps]
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"

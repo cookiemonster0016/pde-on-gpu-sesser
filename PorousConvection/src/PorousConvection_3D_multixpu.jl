@@ -1,6 +1,20 @@
 using ImplicitGlobalGrid
 import MPI
 using Plots, Printf
+include("utils.jl")
+
+using ImplicitGlobalGrid
+import MPI
+using Plots, Printf
+using ParallelStencil
+using ParallelStencil.FiniteDifferences3D
+
+const USE_GPU = true
+@static if USE_GPU
+    @init_parallel_stencil(CUDA, Float64, 3, inbounds=true)
+else
+    @init_parallel_stencil(Threads, Float64, 3, inbounds=false)
+end
 
 @views avx(A) = 0.5 .* (A[1:end-1, :, :] .+ A[2:end, :, :])
 @views avy(A) = 0.5 .* (A[:, 1:end-1, :] .+ A[:, 2:end, :])
@@ -10,6 +24,17 @@ max_g(A) = (max_l = maximum(A); MPI.Allreduce(max_l, MPI.MAX, MPI.COMM_WORLD))
 
     # r_D  .= diff(qDx, dims=1) *_dx + diff(qDy, dims=2) * _dy
     # r_T   .= (-dTdt) .- (diff(diff(T[: , 2:end-1], dims=1), dims=1) ./ (dx*dx) .+ diff(diff(T[2:end-1, :], dims=2), dims=2) ./ (dy*dy))
+
+    """
+    Computes the pressure and temperature residual r_D and r_T
+    using the material derivative of the temperature: dTdt, 
+    the pressure fluxes: qDx, qDy, qDz,
+    the current temperature: T
+    and precomputed divisions:
+    _dx = 1/dx,
+    _dxdx = 1 / dx²
+    
+    """
 @parallel function get_residual!(r_D, r_T, dTdt, qDx, qDy, qDz, T, _dx, _dy, _dz, _dxdx, _dydy, _dzdz)
     @all(r_D) = @d_xa(qDx)*_dx + @d_ya(qDy)*_dy + @d_za(qDz)*_dz
     @all(r_T) = -@all(dTdt) - ( @d2_xi(T)*_dxdx + @d2_yi(T)*_dydy + @d2_zi(T)*_dzdz )
@@ -29,7 +54,16 @@ end
     return
 end
 
-# @parallel (1:size(T,2)) bc_x!(T)
+
+
+"""
+Updates the Temperature in 3 dimensions : T
+
+using the temperature fluxes: qTx, qTy, qTz
+and precomputed divisions:
+_dx = 1/ dx ...,
+_β_dτ_Tp_dt = 1 / (β_dτ_T + dt)
+"""
 
 #T[2:end-1, 2:end-1] .-= (dTdt .+ (diff(qTx, dims=1) ./ dx .+ diff(qTy, dims=2) ./ dy)) ./ (1.0 / dt + β_dτ_T)
 @parallel function update_temperature!(T, dTdt, qTx, qTy, qTz, _dx, _dy, _dz, _β_dτ_Tp_dt)
@@ -47,6 +81,16 @@ end
             #                         min.((qDx)[ix+2, iy+1], 0.0) * (T[ix+2, iy+1] - T[ix+1, iy+1]) * _dx +              #backward x dir
             #                         max.((qDy)[ix+1, iy+1], 0.0) * (T[ix+1, iy+1] - T[ix+1, iy]) * _dy +          #forward y dir
             #                         min.((qDy)[ix+1, iy+2], 0.0) * (T[ix+1, iy+2] - T[ix+1, iy+1]) * _dy) * _ϕ       #backward y dir
+
+"""
+Computes the material derivative of the temperature: dTdt
+using The current and the old temperature: T, Told,
+The pressure fluxes: qDx, qDy, qDz
+and the precomputed divisions:
+_dx = 1/dx, ...
+_dt = 1 / dt, 
+_ϕ = 1 / ϕ
+"""            
 
 @parallel_indices (ix, iy, iz) function compute_materialDerivative!(dTdt, T, T_old, qDx, qDy, qDz, _dx, _dy, _dz, _dt, _ϕ)
     
@@ -67,6 +111,15 @@ end
 end
 
 
+"""
+computes the temperature flux in 3 dimensions : qTx, qTy, qTz
+using the temperature: T
+and precomputed divisions:
+_dx = 1/ dx ...,
+_θ_dτ_Dp1 = 1 / θ_dτ_D + 1
+ λ_ρCp_dx =  λ_ρCp / dx ...,
+
+"""
 
 #    @all(qTx) = @all(qTx) - ((@all(qTx) + λ_ρCp_dx * @d_xi(T)) *_θ_dτ_Tp1)
 #   @all(qTy) = @all(qTy) - ((@all(qTy) + λ_ρCp_dy * @d_yi(T)) *_θ_dτ_Tp1)        
@@ -80,6 +133,14 @@ end
 end
            
 
+"""
+Updates the pressure in 3 dimensions : P
+using forces in x, y and z direction, αρgx, αρgy, αρgz,
+the pressure fluxes: qDx, qDy, qDz
+and precomputed divisions:
+_dx = 1/ dx ...,
+_θ_dτ_D = 1 / θ_dτ_D
+"""
 # P  .-= (diff(qDx, dims =1) ./ dx + diff(qDy, dims = 2)./dy) ./ β_dτ_D
 @parallel function update_P!(P, qDx, qDy, qDz, _β_dτ_D, _dx, _dy, _dz)
     @all(P) = @all(P) - (@d_xa(qDx)*_dx + @d_ya(qDy)*_dy + @d_za(qDz)*_dz) * _β_dτ_D
@@ -87,6 +148,13 @@ end
 end
 
 
+"""
+computes the pressure flux in 3 dimensions : qDx, qDy, qDz
+using forces in x, y and z direction, αρgx, αρgy, αρgz
+and precomputed divisions:
+_dx = 1/ dx ...,
+_θ_dτ_Dp1 = 1 / θ_dτ_D + 1
+"""
     # @inn_x(qDx) = @inn_x(qDx) - ((@inn_x(qDx) + k_ηf * (@d_xa(P)*_dx - αρgx .* @av_xa(T)))* _θ_dτ_Dp1)
     # @inn_y(qDy) = @inn_y(qDy) - ((@inn_y(qDy) + k_ηf * (@d_ya(P)*_dy - αρgy .* @av_ya(T))) * _θ_dτ_Dp1)
 @parallel function compute_flux!(qDx, qDy, qDz, P, T, k_ηf, _dx, _dy, _dz, _θ_dτ_Dp1, αρgx, αρgy, αρgz)
@@ -97,16 +165,23 @@ end
     return nothing
 end
 
+"""
+Does a simulation of porous convection.
+It can run on multiple CPUs or GPUs
+"""
 @views function porous_convection_3D(do_viz = true)
    
    #global grid init
-    nz          = 63
+    nz          = 127
     nx,ny       = 2 * (nz + 1) - 1, nz
-    me, dims    = init_global_grid(nx, ny, nz)  # init global grid and more
+
+    me, dims    = init_global_grid(nx, ny, nz, select_device = false)  # init global grid and more
     b_width     = (8, 8, 4)                     # for comm / comp overlap
-    nt=500
-    maxiter=10*max(nx, ny, nz)
-    ncheck  = ceil(2max(nx, ny, nz)) 
+    nt=6000
+    maxiter=10*max(nx_g(), ny_g(), nz_g())
+    ncheck  = ceil(2max(nx_g(), ny_g(), nz_g())) 
+
+    if(me==0) @printf("starting initialization") end
 
     # physics
     lx      = 40.0
@@ -121,11 +196,11 @@ end
     λ_ρCp      = 1 / Ra * (αρg * k_ηf * ΔT * lz / ϕ) # This changes, because now z is up
  
     # numerics
-    dx      = lx / nx
-    dy      = ly / ny
-    dz      = lz / nz
+    dx      = lx / nx_g()
+    dy      = ly / ny_g()
+    dz      = lz / nz_g()
     ϵtol    = 1e-6
-    nvis    = 50
+    nvis    = 100
     dtd     = min(dx, dy, dz)^2 / λ_ρCp / 4.1
     r_D     = @zeros( nx, ny, nz)
 
@@ -133,7 +208,7 @@ end
     xc = LinRange(-lx/2 + dx/2, lx/2 - dx/2, nx)
     yc = LinRange(-ly/2 + dy/2, ly/2 - dy/2, ny)
 
-    zc = LinRange(-lz + dz/2, -dz/2, nz)#todo das isch villicht falsch!!!!!!!!!!!!!!!!
+    zc = LinRange(-lz + dz/2, -dz/2, nz)
 
     cfl     = 1.0/sqrt(3.1)
 
@@ -201,6 +276,8 @@ end
         iframe = 0
     end
 
+    if(me==0) @printf("starting timeloop") end
+
     # time loop
     for it in 1:nt
 
@@ -252,16 +329,11 @@ end
                 @parallel update_temperature!(T, dTdt, qTx, qTy, qTz, _dx, _dy, _dz, _β_dτ_Tp_dt)
                 
                 #boundary conditions for T 
-
-                #todo call this function correctly
                 @parallel (1:size(T, 2), 1:size(T, 3)) bc_x!(T)
                 @parallel (1:size(T, 1), 1:size(T, 3)) bc_y!(T)
                 update_halo!(T)
 
             end
-
-            T[:, :, 1] .=  ΔT/2
-            T[:, :, end] .= -ΔT/2
 
             if iter % ncheck == 0
 
@@ -299,5 +371,5 @@ end
     return
 end
 
-
+print("calling convection diffusion")
 porous_convection_3D(true)
